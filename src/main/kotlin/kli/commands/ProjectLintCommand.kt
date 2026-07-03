@@ -3,6 +3,8 @@ package kli.commands
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
 import kli.project.ProjectConfigParser
 import kli.project.ProjectRootFinder
 import java.nio.file.Path
@@ -15,19 +17,35 @@ class ProjectLintCommand(
         return "Validate project.json strictly and report schema/type errors"
     }
 
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
+
     override fun run() {
-        val projectRoot = ProjectRootFinder.find(cwd())
-            ?: fail("No project.json found in current directory or parents")
+        try {
+            val projectRoot = ProjectRootFinder.find(cwd())
+                ?: fail("No project.json found in current directory or parents")
 
-        val projectFile = projectRoot.resolve("project.json")
-        val result = ProjectConfigParser.load(projectFile, strictUnknownFields = true)
+            val projectFile = projectRoot.resolve("project.json")
+            val result = ProjectConfigParser.load(projectFile, strictUnknownFields = true)
 
-        if (!result.isValid) {
-            result.errors.forEach { echo("error: $it", err = true) }
+            if (!result.isValid) {
+                result.errors.forEach { echo("error: $it", err = true) }
+                throw ProgramResult(1)
+            }
+
+            echo("${projectFile.name} is valid")
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message ?: "Unknown error"}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
             throw ProgramResult(1)
         }
-
-        echo("${projectFile.name} is valid")
     }
 
     private fun fail(message: String): Nothing {
