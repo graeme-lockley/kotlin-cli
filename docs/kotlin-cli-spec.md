@@ -239,7 +239,142 @@ kli package --silent
   - `<artifact>-<version>.pom`
   - `maven-metadata-local.xml`
 
-### 2.9 `kli publish [--registry <url>]`
+### 2.9 `kli dependency <subcommand>`
+
+Manages runtime and test dependencies declared in `project.json`.
+
+```
+kli dependency list
+kli dependency status
+kli dependency add <coordinate>
+kli dependency remove <coordinate>
+kli dependency upgrade [coordinate]
+```
+
+All mutating dependency commands (`add`, `remove`, `upgrade`) run `kli clean` automatically after writing `project.json`, because dependency changes invalidate the compilation cache. Use `--no-clean` to skip this.
+
+#### 2.9.1 `kli dependency list`
+
+Prints dependencies grouped by scope (`deps` and `testDeps`).
+
+```
+$ kli dependency list
+Runtime dependencies:
+  io.ktor:ktor-server-netty:3.0.0
+  com.zaxxer:HikariCP:6.0.0
+
+Test dependencies:
+  org.jetbrains.kotlin:kotlin-test:2.0.0
+```
+
+Rules:
+- If only one scope contains dependencies, print only that scope heading
+- If no dependencies exist, print `(no dependencies)`
+
+#### 2.9.2 `kli dependency status`
+
+Resolves configured dependencies and reports whether newer versions are available.
+
+```
+$ kli dependency status
+Checking 5 dependencies against Maven Central...
+
+Runtime dependencies:
+  io.ktor:ktor-server-netty         3.0.0    -> 3.1.2   (latest)
+  com.zaxxer:HikariCP               6.0.0    ✓ up to date
+```
+
+Output semantics:
+- Green `✓` for up to date
+- Yellow `->` for update available
+- Red `✗` if the dependency cannot be resolved
+
+Options:
+- `--registry <url>`: override registry used for version checks
+- `--offline`: do not query remote registries, use local cache only
+- `--format json`: machine-readable output for CI/tooling
+- `--show-all`: include all available versions
+
+Offline/unknown latest example:
+
+```
+io.ktor:ktor-server-netty         3.0.0    ? (offline)
+```
+
+Exit codes:
+- `0`: all dependencies up to date
+- `2`: update available for at least one dependency or resolution failure
+
+#### 2.9.3 `kli dependency add <coordinate>`
+
+Adds a dependency to `project.json` and then cleans cache unless disabled.
+
+```
+$ kli dependency add io.ktor:ktor-server-netty:3.0.0
+✓ Added io.ktor:ktor-server-netty:3.0.0 (runtime)
+✓ Cache cleaned
+```
+
+Options:
+- `--scope runtime|test` (default `runtime`)
+- `--latest`: resolve and use latest version when version is omitted
+- `--registry <url>`: override registry for `--latest`
+- `--no-clean`: skip automatic clean
+
+Rules:
+- If version is missing and `--latest` is not provided, fail with guidance
+- If exact coordinate already exists, print warning and no-op
+- If `group:artifact` exists at a different version, fail and suggest `dependency upgrade`
+
+#### 2.9.4 `kli dependency remove <coordinate>`
+
+Removes dependency entries from `project.json` and then cleans cache unless disabled.
+
+Coordinate matching:
+- `group:artifact:version`: remove exact match
+- `group:artifact`: remove any version of artifact
+- `group`: remove all artifacts in that group
+
+Options:
+- `--scope runtime|test`: restrict removal scope
+- `--yes`, `-y`: skip confirmation prompts
+- `--no-clean`: skip automatic clean
+
+If no matching dependency exists, command fails with an error.
+
+#### 2.9.5 `kli dependency upgrade [coordinate] [version]`
+
+Upgrades one dependency or all dependencies.
+
+```
+$ kli dependency upgrade io.ktor:ktor-server-netty
+? Resolving latest version from Maven Central...
+✓ Upgraded io.ktor:ktor-server-netty from 3.0.0 -> 3.1.2
+✓ Cache cleaned
+```
+
+Modes:
+- `kli dependency upgrade`: upgrade all dependencies to latest compatible resolved version
+- `kli dependency upgrade group:artifact`: upgrade one dependency to latest
+- `kli dependency upgrade group:artifact:version`: set one dependency to explicit version
+
+Major version bumps:
+- Show warning for `N.x -> (N+1).x`
+- Require confirmation unless `--yes` is supplied
+
+Options:
+- `--scope runtime|test`: restrict upgrade scope
+- `--yes`, `-y`: skip major-bump confirmation
+- `--dry-run`: print planned changes only
+- `--registry <url>`: override registry
+- `--offline`: upgrade only to versions available in local cache
+- `--no-clean`: skip automatic clean
+
+Exit codes:
+- `0`: all targeted dependencies already at desired versions
+- `2`: one or more upgrades failed
+
+### 2.10 `kli publish [--registry <url>]`
 
 *(Future / stretch goal)*
 
@@ -254,7 +389,7 @@ kli publish --registry https://repo.example.com/releases
 2. Deploy the fat JAR and `pom.xml` to the specified registry
 3. Default registry from `project.json` → `publish.registry` (or `https://repo.maven.apache.org/maven2` if unset)
 
-### 2.10 `kli build --output <path>`
+### 2.11 `kli build --output <path>`
 
 *(Future / stretch goal)*
 
@@ -265,7 +400,7 @@ kli build --output ./dist/app.jar
 java -jar ./dist/app.jar tools.CLI
 ```
 
-### 2.11 Exit Codes
+### 2.12 Exit Codes
 
 | Command | Exit code 0 | Exit code 1 | Exit code 2 |
 |---|---|---|---|
@@ -276,10 +411,22 @@ java -jar ./dist/app.jar tools.CLI
 | `kli init [name]` | Project created | Scaffolding failed | CLI usage error |
 | `kli project-lint` | Config valid | Config invalid | CLI usage error |
 | `kli refresh` | Dependencies refreshed and project rebuilt | Refresh/build failed | CLI usage error |
+| `kli dependency list` | Dependencies listed | Failed to read config | CLI usage error |
+| `kli dependency status` | All dependencies up to date | Status check failed | At least one update available, or at least one dependency resolution failed |
+| `kli dependency add <coordinate>` | Dependency added (or already present no-op) | Failed to update config | CLI usage error |
+| `kli dependency remove <coordinate>` | Dependency removed | Failed to update config | CLI usage error |
+| `kli dependency upgrade [coordinate]` | All targeted dependencies at desired version | Failed to update config | At least one targeted upgrade failed |
 | `kli build --output <path>` | JAR built successfully | Build failed | CLI usage error |
 | `kli package [--output <path>]` | JAR built and installed to `~/.kli/m2/` | Build/install failed | CLI usage error |
 | `--silent` flag on run/test/package | Hides light-gray dependency/compile progress lines | n/a | n/a |
 | `kli publish [--registry <url>]` | Artifact published | Publish failed | CLI usage error |
+
+### 2.13 Global Options
+
+| Option | Behaviour |
+|---|---|
+| `--version` | Display tool version and exit with code 0 |
+| `--help` or `-h` | Display help for the command and exit with code 0 |
 
 ---
 
@@ -517,6 +664,22 @@ Step 3: Delete ~/.kli/cache/<hash>/
 - Include all resolved resources at JAR root
 - Zip everything into the output file
 
+### 5.11 `dependency` command internals
+
+For `list`, `add`, `remove`, and `upgrade`, kli operates directly on `project.json`:
+
+1. Parse current config into a `ProjectConfig`
+2. Modify `deps` and/or `testDeps`
+3. Serialize config back to JSON with stable formatting and field order
+
+For `status` and `upgrade`, latest-version resolution queries Maven metadata from configured repositories (default Maven Central):
+
+```
+GET https://repo.maven.apache.org/maven2/io/ktor/ktor-server-netty/maven-metadata.xml
+```
+
+In offline mode, remote metadata lookups are skipped and only local cache metadata is considered.
+
 ---
 
 ## 6. Implementation Plan
@@ -546,10 +709,11 @@ Step 3: Delete ~/.kli/cache/<hash>/
 
 ### Phase 3 — Quality of life
 
-- [ ] `init` command (scaffolding)
-- [ ] `refresh` command (SNAPSHOT re-resolution)
-- [ ] Better error messages with suggestions
-- [ ] `--version` flag
+- [x] `init` command (scaffolding)
+- [x] `refresh` command (SNAPSHOT re-resolution)
+- [ ] `dependency` command family (`list`, `status`, `add`, `remove`, `upgrade`)
+- [x] Better error messages with suggestions
+- [x] `--version` flag
 - [ ] Shell completion (optional)
 
 ### Phase 4 — Package & Publish
@@ -616,6 +780,12 @@ mkdir my-api && cd my-api
 kli init
 
 # Add a dependency (edit project.json)
+
+# Or use dependency commands
+kli dependency add io.ktor:ktor-server-netty:3.0.0
+kli dependency status
+kli dependency upgrade --dry-run
+kli dependency remove io.ktor:ktor-server-netty
 
 # Run the server
 kli run tools.Server
