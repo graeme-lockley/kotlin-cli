@@ -61,6 +61,7 @@ class PackageServiceTest {
         assertEquals("kli.dispatcher.MainDispatcherKt", fakeJarBuilder.lastMainClass)
         assertTrue(fakeJarBuilder.lastRuntimeDependencies?.isEmpty() == true)
         assertTrue(fakeJarBuilder.lastAdditionalEntries?.containsKey("config/app.conf") == true)
+        assertEquals("io.kli.local", fakeInstaller.lastGroupId)
         assertEquals("demo", fakeInstaller.lastArtifact)
         assertEquals("1.2.3", fakeInstaller.lastVersion)
     }
@@ -142,10 +143,12 @@ class PackageServiceTest {
     }
 
     private class FakeInstaller : MavenInstaller {
+        var lastGroupId: String? = null
         var lastArtifact: String? = null
         var lastVersion: String? = null
 
-        override fun install(jar: Path, artifact: String, version: String, userHome: String): Path {
+        override fun install(jar: Path, groupId: String, artifact: String, version: String, userHome: String): Path {
+            lastGroupId = groupId
             lastArtifact = artifact
             lastVersion = version
             return jar
