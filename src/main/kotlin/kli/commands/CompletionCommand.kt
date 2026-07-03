@@ -4,6 +4,8 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
 import java.nio.file.Path
 
 class CompletionCommand(
@@ -14,17 +16,32 @@ class CompletionCommand(
     }
 
     private val shell by argument("SHELL", help = "Shell type: bash or zsh")
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
 
     override fun run() {
-        val script = when (shell.lowercase()) {
-            "bash" -> generateBashCompletion()
-            "zsh" -> generateZshCompletion()
-            else -> {
-                echo("error: Unsupported shell. Use: bash or zsh", err = true)
-                throw ProgramResult(1)
+        try {
+            val script = when (shell.lowercase()) {
+                "bash" -> generateBashCompletion()
+                "zsh" -> generateZshCompletion()
+                else -> {
+                    echo("error: Unsupported shell. Use: bash or zsh", err = true)
+                    throw ProgramResult(1)
+                }
             }
+            echo(script)
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message ?: "Unknown error"}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
+            throw ProgramResult(1)
         }
-        echo(script)
     }
 
     private fun generateBashCompletion(): String {
