@@ -1,5 +1,7 @@
 package kli.run
 
+import kli.cache.CompilationManifest
+import kli.cache.ManifestStore
 import kli.cache.ProjectCacheLayouts
 import kli.compiler.CompilationResult
 import kli.compiler.KotlinCompiler
@@ -50,6 +52,38 @@ class RunExecutorTest {
         assertEquals("tools.ServerKt", runner.lastMainClass)
     }
 
+    @Test
+    fun skips_compilation_when_manifest_is_up_to_date() {
+        val projectRoot = Files.createTempDirectory("kli-run-exec-skip")
+        val source = projectRoot.resolve("tools/Server.kt")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "fun main() {}")
+
+        val plan = createPlan(projectRoot, listOf(source), mainClass = "tools.Server")
+        val classFile = plan.cacheLayout.classesDir.resolve("tools/ServerKt.class")
+        Files.createDirectories(classFile.parent)
+        Files.writeString(classFile, "bytecode")
+
+        val compiler = CountingCompiler(CompilationResult(success = true))
+        val runner = FakeRunner(0)
+        val store = ManifestStore()
+        val sourceHash = kli.cache.SourceHasher.sha256(source)
+        store.save(
+            plan.cacheLayout.manifestFile,
+            CompilationManifest(
+                sourceHashes = mapOf("tools/Server.kt" to sourceHash),
+                classpathFingerprint = kli.cache.IncrementalCompilation.classpathFingerprint(emptyList()),
+            ),
+        )
+        val executor = RunExecutor(compiler, runner, store)
+
+        val result = executor.execute(plan)
+
+        assertTrue(result is RunExecutionOutcome.Success)
+        assertEquals(0, compiler.invocations)
+        assertEquals(1, runner.invocations)
+    }
+
     private fun createPlan(
         projectRoot: Path,
         sourceFiles: List<Path>,
@@ -83,6 +117,22 @@ class RunExecutorTest {
             classpath: List<Path>,
             jvmTarget: String,
         ): CompilationResult = result
+    }
+
+    private class CountingCompiler(
+        private val result: CompilationResult,
+    ) : KotlinCompiler {
+        var invocations: Int = 0
+
+        override fun compile(
+            sourceFiles: List<Path>,
+            outputDirectory: Path,
+            classpath: List<Path>,
+            jvmTarget: String,
+        ): CompilationResult {
+            invocations += 1
+            return result
+        }
     }
 
     private class FakeRunner(

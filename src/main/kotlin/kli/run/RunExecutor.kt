@@ -1,5 +1,8 @@
 package kli.run
 
+import kli.cache.CompilationManifest
+import kli.cache.IncrementalCompilation
+import kli.cache.ManifestStore
 import kli.compiler.CompilationResult
 import kli.compiler.EmbeddableKotlinCompiler
 import kli.compiler.KotlinCompiler
@@ -18,17 +21,39 @@ sealed interface RunExecutionOutcome {
 class RunExecutor(
     private val compiler: KotlinCompiler = EmbeddableKotlinCompiler(),
     private val programRunner: ProgramRunner = ReflectiveProgramRunner(),
+    private val manifestStore: ManifestStore = ManifestStore(),
 ) {
     fun execute(plan: RunPlan): RunExecutionOutcome {
-        val compilation = compiler.compile(
-            sourceFiles = plan.sourceFiles,
-            outputDirectory = plan.cacheLayout.classesDir,
-            classpath = plan.dependencies.runtimeClasspath,
-            jvmTarget = plan.config.target,
+        val sourceHashes = IncrementalCompilation.computeSourceHashes(plan.projectRoot, plan.sourceFiles)
+        val classpathFingerprint = IncrementalCompilation.classpathFingerprint(plan.dependencies.runtimeClasspath)
+        val existingManifest = manifestStore.load(plan.cacheLayout.manifestFile)
+
+        val upToDate = IncrementalCompilation.isUpToDate(
+            manifest = existingManifest,
+            sourceHashes = sourceHashes,
+            classpathFingerprint = classpathFingerprint,
+            classesDir = plan.cacheLayout.classesDir,
         )
 
-        if (!compilation.success) {
-            return RunExecutionOutcome.Failure(compilation.message ?: "Compilation failed")
+        if (!upToDate) {
+            val compilation = compiler.compile(
+                sourceFiles = plan.sourceFiles,
+                outputDirectory = plan.cacheLayout.classesDir,
+                classpath = plan.dependencies.runtimeClasspath,
+                jvmTarget = plan.config.target,
+            )
+
+            if (!compilation.success) {
+                return RunExecutionOutcome.Failure(compilation.message ?: "Compilation failed")
+            }
+
+            manifestStore.save(
+                plan.cacheLayout.manifestFile,
+                CompilationManifest(
+                    sourceHashes = sourceHashes,
+                    classpathFingerprint = classpathFingerprint,
+                ),
+            )
         }
 
         val runtimeClasspath = buildRuntimeClasspath(plan)
