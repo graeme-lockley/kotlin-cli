@@ -1,9 +1,10 @@
 package kli
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.CliktError
 import com.github.ajalt.clikt.core.Context
+import com.github.ajalt.clikt.core.PrintHelpMessage
 import com.github.ajalt.clikt.core.PrintMessage
-import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.parse
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.core.UsageError
@@ -13,12 +14,13 @@ import kli.commands.CommandEnvironment
 import kli.commands.PackageCommand
 import kli.commands.ProjectLintCommand
 import kli.commands.RunCommand
+import kli.commands.TestCommand
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
 class Kli : CliktCommand(name = "kli") {
     override fun help(context: Context): String {
-        return "Minimal Kotlin CLI for run, package, and cache management workflows"
+        return "Minimal Kotlin CLI for run, test, package, and cache management workflows"
     }
 
     override fun run() {
@@ -33,19 +35,31 @@ fun buildCli(cwd: () -> Path = CommandEnvironment::cwd): Kli {
             CleanCommand(cwd),
             CleanAllCommand(),
             RunCommand(cwd),
+            TestCommand(cwd),
             PackageCommand(cwd),
         )
 }
 
 fun runCli(args: Array<String>, cwd: () -> Path = CommandEnvironment::cwd): Int {
+    val effectiveArgs = if (args.isEmpty()) arrayOf("--help") else args
+
     return try {
-        buildCli(cwd).parse(args)
+        buildCli(cwd).parse(effectiveArgs)
         0
-    } catch (ex: UsageError) {
-        2
-    } catch (ex: ProgramResult) {
+    } catch (ex: PrintHelpMessage) {
+        ex.context?.command?.echoFormattedHelp(ex)
+            ?: ex.message?.let { println(it) }
         ex.statusCode
+    } catch (ex: UsageError) {
+        ex.message?.let { System.err.println(it) }
+        2
     } catch (ex: PrintMessage) {
+        ex.message?.let {
+            if (ex.printError) System.err.println(it) else println(it)
+        }
+        ex.statusCode
+    } catch (ex: CliktError) {
+        ex.message?.let { System.err.println(it) }
         ex.statusCode
     }
 }
