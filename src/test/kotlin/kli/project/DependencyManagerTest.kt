@@ -254,4 +254,49 @@ class DependencyManagerTest {
             assertTrue(deps.runtimeDeps.contains("io.ktor:ktor-core:2.0.0"))
         }
     }
+
+    @Test
+    fun add_with_latest_resolves_version() {
+        projectJsonPath.writeText("""
+            {
+              "name": "test",
+              "version": "1.0.0",
+              "deps": [],
+              "testDeps": []
+            }
+        """.trimIndent())
+        
+        val manager = DependencyManager(projectJsonPath)
+        // Use a real coordinate that exists in Maven Central
+        val result = manager.add("junit:junit", "runtime", latest = true)
+        
+        assertIs<DependencyOutcome.Success>(result)
+        assertTrue(result.message.contains("added to runtime dependencies"))
+        
+        val manager2 = DependencyManager(projectJsonPath)
+        val listResult = manager2.list()
+        listResult.onSuccess { deps ->
+            // Should have junit with some version (not unversioned)
+            val hasJunit = deps.runtimeDeps.any { it.startsWith("junit:junit:") }
+            assertTrue(hasJunit, "junit should be added with a resolved version")
+        }
+    }
+
+    @Test
+    fun add_without_latest_requires_version() {
+        projectJsonPath.writeText("""
+            {
+              "name": "test",
+              "version": "1.0.0",
+              "deps": [],
+              "testDeps": []
+            }
+        """.trimIndent())
+        
+        val manager = DependencyManager(projectJsonPath)
+        val result = manager.add("junit:junit", "runtime", latest = false)
+        
+        assertIs<DependencyOutcome.Failure>(result)
+        assertTrue(result.message.contains("group:artifact:version") || result.message.contains("--latest"))
+    }
 }

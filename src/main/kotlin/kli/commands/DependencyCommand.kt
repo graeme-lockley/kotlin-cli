@@ -177,7 +177,7 @@ class DependencyStatusSubcommand(private val cwd: () -> Path) : CliktCommand(nam
 }
 
 class DependencyAddSubcommand(private val cwd: () -> Path) : CliktCommand(name = "add") {
-    private val coordinate by argument("COORDINATE", help = "Maven coordinate (group:artifact:version)")
+    private val coordinate by argument("COORDINATE", help = "Maven coordinate (group:artifact or group:artifact:version)")
     private val scope by option("--scope", help = "Dependency scope: runtime or test")
     private val latest by option("--latest", help = "Resolve to latest version").flag(default = false)
     private val registry by option("--registry", help = "Registry for --latest resolution")
@@ -189,9 +189,18 @@ class DependencyAddSubcommand(private val cwd: () -> Path) : CliktCommand(name =
 
     override fun run() {
         val colonCount = coordinate.count { it == ':' }
-        if (colonCount < 2) {
-            echo("error: Invalid coordinate. Format: group:artifact:version (requires exactly 2 colons)", err = true)
-            throw ProgramResult(2)
+        if (latest) {
+            // With --latest, we need group:artifact (1 colon)
+            if (colonCount != 1) {
+                echo("error: With --latest, coordinate must be group:artifact (exactly 1 colon)", err = true)
+                throw ProgramResult(2)
+            }
+        } else {
+            // Without --latest, we need group:artifact:version (2 colons)
+            if (colonCount != 2) {
+                echo("error: Invalid coordinate. Format: group:artifact:version (or use --latest for automatic version resolution)", err = true)
+                throw ProgramResult(2)
+            }
         }
 
         val projectRoot = ProjectRootFinder.find(cwd())
@@ -202,7 +211,8 @@ class DependencyAddSubcommand(private val cwd: () -> Path) : CliktCommand(name =
 
         val manager = DependencyManager(projectRoot.resolve("project.json"))
         val resolvedScope = scope ?: "runtime"
-        val outcome = manager.add(coordinate, resolvedScope)
+        val registryUrl = registry ?: "https://repo.maven.apache.org/maven2"
+        val outcome = manager.add(coordinate, resolvedScope, latest, registryUrl)
 
         when (outcome) {
             is kli.project.DependencyOutcome.Success -> {

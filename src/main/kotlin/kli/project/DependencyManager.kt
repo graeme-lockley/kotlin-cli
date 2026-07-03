@@ -30,9 +30,9 @@ class DependencyManager(private val projectJsonPath: Path) {
         )
     }
     
-    fun add(coordinate: String, scope: String = "runtime"): DependencyOutcome {
+    fun add(coordinate: String, scope: String = "runtime", latest: Boolean = false, registryUrl: String = "https://repo.maven.apache.org/maven2"): DependencyOutcome {
         if (!coordinate.contains(":")) {
-            return DependencyOutcome.Failure("Invalid coordinate: $coordinate. Format: group:artifact:version")
+            return DependencyOutcome.Failure("Invalid coordinate: $coordinate. Format: group:artifact (requires --latest) or group:artifact:version")
         }
         
         val configResult = ProjectConfigParser.load(projectJsonPath, strictUnknownFields = false)
@@ -42,27 +42,49 @@ class DependencyManager(private val projectJsonPath: Path) {
         
         val config = configResult.config
         
+        // Resolve version if needed
+        val resolvedCoordinate = if (latest) {
+            val parts = coordinate.split(":")
+            if (parts.size != 2) {
+                return DependencyOutcome.Failure("Invalid coordinate for --latest: $coordinate. Format: group:artifact")
+            }
+            val versionResolver = MavenCentralVersionResolver()
+            val versionInfo = versionResolver.resolveVersions(coordinate, registryUrl)
+            if (versionInfo.error != null) {
+                return DependencyOutcome.Failure("Failed to resolve latest version: ${versionInfo.error}")
+            }
+            if (versionInfo.latest == null) {
+                return DependencyOutcome.Failure("No versions found for $coordinate")
+            }
+            "$coordinate:${versionInfo.latest}"
+        } else {
+            if (!coordinate.contains(":") || coordinate.split(":").size != 3) {
+                return DependencyOutcome.Failure("Invalid coordinate: $coordinate. Format: group:artifact:version (or use --latest)")
+            }
+            coordinate
+        }
+        
         // Check if already exists
         val existingList = if (scope == "test") config.testDeps else config.deps
-        if (existingList.contains(coordinate)) {
-            return DependencyOutcome.Failure("$coordinate already exists in $scope dependencies")
+        if (existingList.contains(resolvedCoordinate)) {
+            return DependencyOutcome.Failure("$resolvedCoordinate already exists in $scope dependencies")
         }
         
         // Check if group:artifact exists at different version
-        val parts = coordinate.split(":")
-        val coordinatePrefix = if (parts.size >= 2) "${parts[0]}:${parts[1]}" else coordinate
+        val parts = resolvedCoordinate.split(":")
+        val coordinatePrefix = if (parts.size >= 2) "${parts[0]}:${parts[1]}" else resolvedCoordinate
         val conflicting = existingList.find { it.startsWith(coordinatePrefix + ":") }
         if (conflicting != null) {
             return DependencyOutcome.Failure("$coordinatePrefix already exists at version ${conflicting.substringAfterLast(":")}. Use 'kli dependency upgrade' to change versions.")
         }
         
         val updatedDeps = if (scope == "test") {
-            config.copy(testDeps = config.testDeps + coordinate)
+            config.copy(testDeps = config.testDeps + resolvedCoordinate)
         } else {
-            config.copy(deps = config.deps + coordinate)
+            config.copy(deps = config.deps + resolvedCoordinate)
         }
         
-        return writeConfig(updatedDeps, coordinate, "added to $scope dependencies")
+        return writeConfig(updatedDeps, resolvedCoordinate, "added to $scope dependencies")
     }
     
     fun remove(coordinate: String, scope: String? = null, force: Boolean = false): DependencyOutcome {
