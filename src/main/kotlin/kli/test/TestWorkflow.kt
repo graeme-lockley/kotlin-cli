@@ -40,7 +40,12 @@ class TestWorkflow(
 ) {
     fun prepare(pathFilter: String?): TestWorkflowOutcome {
         val projectRoot = ProjectRootFinder.find(cwd())
-            ?: return TestWorkflowOutcome.Failure(listOf("No project.json found in current directory or parents"))
+            ?: return TestWorkflowOutcome.Failure(
+                listOf(
+                    "No project.json found in current directory or parents",
+                    "Hint: Create a new project with: kli init [name]",
+                ),
+            )
 
         val projectFile = projectRoot.resolve("project.json")
         val parsed = ProjectConfigParser.load(projectFile, strictUnknownFields = false)
@@ -52,10 +57,21 @@ class TestWorkflow(
         val discovered = SourceLocator.discoverTestSources(projectRoot, config)
         val runSources = SourceLocator.discoverRunSources(projectRoot, config)
         val selected = selectTests(projectRoot, discovered, pathFilter)
-            ?: return TestWorkflowOutcome.Failure(listOf("No matching test files found"))
+            ?: return TestWorkflowOutcome.Failure(
+                listOf(
+                    "No matching test files found for path: $pathFilter",
+                    "Check that the path exists and matches a *Test.kt file or directory.",
+                ),
+            )
 
         if (selected.isEmpty()) {
-            return TestWorkflowOutcome.Failure(listOf("No matching test files found"))
+            return TestWorkflowOutcome.Failure(
+                listOf(
+                    "No test files found matching pattern *Test.kt",
+                    "Hint: Create test files ending with 'Test.kt' in your project.",
+                    "Example: tools/SampleTest.kt",
+                ),
+            )
         }
 
         val compileSources = (runSources + selected)
@@ -65,7 +81,12 @@ class TestWorkflow(
         val dependencies = try {
             dependencyResolver.resolve(config)
         } catch (ex: Exception) {
-            return TestWorkflowOutcome.Failure(listOf("Dependency resolution failed: ${ex.message}"))
+            return TestWorkflowOutcome.Failure(
+                listOf(
+                    "Dependency resolution failed: ${ex.message}",
+                    "Hint: Check your 'deps' or 'testDeps' in project.json for correct Maven coordinates.",
+                ),
+            )
         }
 
         val cacheLayout = ProjectCacheLayouts.forProject(projectRoot, userHome)

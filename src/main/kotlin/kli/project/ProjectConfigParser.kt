@@ -23,17 +23,31 @@ object ProjectConfigParser {
         val raw = try {
             file.readText()
         } catch (ex: Exception) {
-            return ProjectConfigLoadResult(errors = listOf("Unable to read ${file.fileName}: ${ex.message}"))
+            return ProjectConfigLoadResult(
+                errors = listOf(
+                    "Unable to read ${file.fileName}: ${ex.message}",
+                    "Hint: Ensure project.json exists and is readable.",
+                ),
+            )
         }
 
         val root = try {
             JsonParser.parseString(raw)
         } catch (ex: Exception) {
-            return ProjectConfigLoadResult(errors = listOf("Invalid JSON in ${file.fileName}: ${ex.message}"))
+            return ProjectConfigLoadResult(
+                errors = listOf(
+                    "Invalid JSON in ${file.fileName}: ${ex.message}",
+                    "Hint: Check JSON syntax. Use a JSON validator or 'kli project-lint'.",
+                ),
+            )
         }
 
         if (!root.isJsonObject) {
-            return ProjectConfigLoadResult(errors = listOf("project.json must be a JSON object"))
+            return ProjectConfigLoadResult(
+                errors = listOf(
+                    "project.json must be a JSON object",
+                ),
+            )
         }
 
         return parseObject(root.asJsonObject, strictUnknownFields)
@@ -48,6 +62,9 @@ object ProjectConfigParser {
                     errors += "Unknown field: $key"
                 }
             }
+            if (errors.isNotEmpty()) {
+                errors += "Hint: Check project.json for typos. Run 'kli project-lint' for detailed validation."
+            }
         }
 
         val name = stringField(json, "name", required = false, errors = errors)
@@ -57,7 +74,7 @@ object ProjectConfigParser {
             json.get("target").isJsonPrimitive && json.get("target").asJsonPrimitive.isString -> json.get("target").asString
             json.get("target").isJsonPrimitive && json.get("target").asJsonPrimitive.isNumber -> json.get("target").asNumber.toString()
             else -> {
-                errors += "Field target must be a string or number"
+                errors += "Field 'target' must be a string or number (e.g., \"21\" or 21), got: ${json.get("target")}"
                 "21"
             }
         }

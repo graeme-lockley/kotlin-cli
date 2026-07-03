@@ -134,4 +134,10 @@ class MainTest {
         val code = runCli(arrayOf("test")) { root }
         assertEquals(0, code)
     }
+
+    @Test
+    fun version_flag_returns_exit_code_0() {
+        val code = runCli(arrayOf("--version"))
+        assertEquals(0, code)
+    }
 }
