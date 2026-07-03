@@ -72,7 +72,9 @@ class RunExecutorTest {
             plan.cacheLayout.manifestFile,
             CompilationManifest(
                 sourceHashes = mapOf("tools/Server.kt" to sourceHash),
-                classpathFingerprint = kli.cache.IncrementalCompilation.classpathFingerprint(emptyList()),
+                classpathFingerprint = kli.cache.IncrementalCompilation.classpathFingerprint(
+                    listOf(Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())),
+                ),
             ),
         )
         val executor = RunExecutor(compiler, runner, store)

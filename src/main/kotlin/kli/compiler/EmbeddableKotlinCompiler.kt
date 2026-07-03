@@ -31,6 +31,8 @@ class EmbeddableKotlinCompiler(
             destination = outputDirectory.toString()
             this.jvmTarget = jvmTarget
             this.classpath = classpath.joinToString(File.pathSeparator) { it.toString() }
+            noStdlib = true
+            noReflect = true
         }
 
         val collector = PrintingMessageCollector(errorStream, MessageRenderer.PLAIN_RELATIVE_PATHS, true)

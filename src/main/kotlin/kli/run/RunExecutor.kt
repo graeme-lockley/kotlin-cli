@@ -24,8 +24,9 @@ class RunExecutor(
     private val manifestStore: ManifestStore = ManifestStore(),
 ) {
     fun execute(plan: RunPlan): RunExecutionOutcome {
+        val compileClasspath = buildCompileClasspath(plan)
         val sourceHashes = IncrementalCompilation.computeSourceHashes(plan.projectRoot, plan.sourceFiles)
-        val classpathFingerprint = IncrementalCompilation.classpathFingerprint(plan.dependencies.runtimeClasspath)
+        val classpathFingerprint = IncrementalCompilation.classpathFingerprint(compileClasspath)
         val existingManifest = manifestStore.load(plan.cacheLayout.manifestFile)
 
         val upToDate = IncrementalCompilation.isUpToDate(
@@ -39,7 +40,7 @@ class RunExecutor(
             val compilation = compiler.compile(
                 sourceFiles = plan.sourceFiles,
                 outputDirectory = plan.cacheLayout.classesDir,
-                classpath = plan.dependencies.runtimeClasspath,
+                classpath = compileClasspath,
                 jvmTarget = plan.config.target,
             )
 
@@ -68,11 +69,20 @@ class RunExecutor(
     }
 
     private fun buildRuntimeClasspath(plan: RunPlan): List<Path> {
-        val stdlibPath = Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())
+        val stdlibPath = kotlinStdlibPath()
         return buildList {
             add(plan.cacheLayout.classesDir)
             add(stdlibPath)
             addAll(plan.dependencies.runtimeClasspath)
         }.distinct()
     }
+
+    private fun buildCompileClasspath(plan: RunPlan): List<Path> {
+        return buildList {
+            add(kotlinStdlibPath())
+            addAll(plan.dependencies.runtimeClasspath)
+        }.distinct()
+    }
+
+    private fun kotlinStdlibPath(): Path = Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())
 }
