@@ -40,39 +40,54 @@ class TestCommand(
         "--silent",
         help = "Hide compile and dependency progress output",
     ).flag(default = false)
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
 
     override fun run() {
-        val workflow = TestWorkflow(
-            cwd = cwd,
-            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
-                if (!silent) {
-                    echo(formatDependencyProgress(coordinate, durationMs))
-                }
-            },
-        )
-        when (val result = workflow.prepare(pathFilter)) {
-            is TestWorkflowOutcome.Failure -> {
-                result.errors.forEach { echo("error: $it", err = true) }
-                throw ProgramResult(1)
-            }
-
-            is TestWorkflowOutcome.Success -> {
-                val testExecutor = testExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+        try {
+            val workflow = TestWorkflow(
+                cwd = cwd,
+                dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
                     if (!silent) {
-                        echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
+                        echo(formatDependencyProgress(coordinate, durationMs))
                     }
+                },
+            )
+            when (val result = workflow.prepare(pathFilter)) {
+                is TestWorkflowOutcome.Failure -> {
+                    result.errors.forEach { echo("error: $it", err = true) }
+                    throw ProgramResult(1)
                 }
-                when (val execution = testExecutor.execute(result.plan)) {
-                    is TestExecutionOutcome.Success -> {
-                        // Summary line is printed by the generated test runner.
-                    }
 
-                    is TestExecutionOutcome.Failure -> {
-                        echo("error: ${execution.message}", err = true)
-                        throw ProgramResult(1)
+                is TestWorkflowOutcome.Success -> {
+                    val testExecutor = testExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+                        if (!silent) {
+                            echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
+                        }
+                    }
+                    when (val execution = testExecutor.execute(result.plan)) {
+                        is TestExecutionOutcome.Success -> {
+                            // Summary line is printed by the generated test runner.
+                        }
+
+                        is TestExecutionOutcome.Failure -> {
+                            echo("error: ${execution.message}", err = true)
+                            throw ProgramResult(1)
+                        }
                     }
                 }
             }
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
+            throw ProgramResult(1)
         }
     }
 }

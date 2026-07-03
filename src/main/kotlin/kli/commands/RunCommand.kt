@@ -44,41 +44,56 @@ class RunCommand(
         "--silent",
         help = "Hide compile and dependency progress output",
     ).flag(default = false)
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
 
     override fun run() {
-        val workflow = RunWorkflow(
-            cwd = cwd,
-            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
-                if (!silent) {
-                    echo(formatDependencyProgress(coordinate, durationMs))
-                }
-            },
-        )
-        when (val result = workflow.prepare(mainClass, programArgs)) {
-            is RunWorkflowOutcome.Failure -> {
-                result.errors.forEach { echo("error: $it", err = true) }
-                throw ProgramResult(1)
-            }
-
-            is RunWorkflowOutcome.Success -> {
-                val runExecutor = runExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+        try {
+            val workflow = RunWorkflow(
+                cwd = cwd,
+                dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
                     if (!silent) {
-                        echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
+                        echo(formatDependencyProgress(coordinate, durationMs))
                     }
+                },
+            )
+            when (val result = workflow.prepare(mainClass, programArgs)) {
+                is RunWorkflowOutcome.Failure -> {
+                    result.errors.forEach { echo("error: $it", err = true) }
+                    throw ProgramResult(1)
                 }
-                when (val execution = runExecutor.execute(result.plan)) {
-                    is RunExecutionOutcome.Success -> {
-                        if (execution.exitCode != 0) {
-                            throw ProgramResult(execution.exitCode)
+
+                is RunWorkflowOutcome.Success -> {
+                    val runExecutor = runExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+                        if (!silent) {
+                            echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
                         }
                     }
+                    when (val execution = runExecutor.execute(result.plan)) {
+                        is RunExecutionOutcome.Success -> {
+                            if (execution.exitCode != 0) {
+                                throw ProgramResult(execution.exitCode)
+                            }
+                        }
 
-                    is RunExecutionOutcome.Failure -> {
-                        echo("error: ${execution.message}", err = true)
-                        throw ProgramResult(1)
+                        is RunExecutionOutcome.Failure -> {
+                            echo("error: ${execution.message}", err = true)
+                            throw ProgramResult(1)
+                        }
                     }
                 }
             }
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
+            throw ProgramResult(1)
         }
     }
 }
