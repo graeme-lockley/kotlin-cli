@@ -16,10 +16,14 @@ import org.eclipse.aether.util.repository.SimpleArtifactDescriptorPolicy
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils
 import java.nio.file.Path
 
+interface DependencyResolver {
+    fun resolve(config: ProjectConfig): DependencyResolutionResult
+}
+
 class MavenDependencyResolver(
     private val userHome: String = System.getProperty("user.home"),
-) {
-    fun resolve(config: ProjectConfig): DependencyResolutionResult {
+) : DependencyResolver {
+    override fun resolve(config: ProjectConfig): DependencyResolutionResult {
         val repositorySystem = createRepositorySystem()
         val session = MavenRepositorySystemUtils.newSession()
         session.setArtifactDescriptorPolicy(SimpleArtifactDescriptorPolicy(true, true))

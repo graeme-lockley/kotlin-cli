@@ -7,6 +7,7 @@ import kli.commands.CleanAllCommand
 import kli.commands.CleanCommand
 import kli.commands.CommandEnvironment
 import kli.commands.ProjectLintCommand
+import kli.commands.RunCommand
 
 class Kli : CliktCommand(name = "kli") {
     override fun run() {
@@ -20,6 +21,7 @@ fun main(args: Array<String>) {
             ProjectLintCommand(CommandEnvironment::cwd),
             CleanCommand(CommandEnvironment::cwd),
             CleanAllCommand(),
+            RunCommand(CommandEnvironment::cwd),
         )
     .main(args)
 }
