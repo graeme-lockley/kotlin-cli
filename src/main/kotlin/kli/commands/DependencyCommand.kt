@@ -280,7 +280,8 @@ class DependencyUpgradeSubcommand(private val cwd: () -> Path) : CliktCommand(na
             }
 
         val manager = DependencyManager(projectRoot.resolve("project.json"))
-        val outcome = manager.upgrade(coordinate, version, scope, dryRun)
+        val registryUrl = registry ?: "https://repo.maven.apache.org/maven2"
+        val outcome = manager.upgrade(coordinate, version, scope, dryRun, registryUrl)
 
         when (outcome) {
             is kli.project.DependencyOutcome.Success -> {

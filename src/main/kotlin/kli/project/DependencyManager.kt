@@ -4,6 +4,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+import kli.resolver.MavenCentralVersionResolver
+import kli.resolver.MavenCoordinate
 
 sealed interface DependencyOutcome {
     data class Success(val message: String) : DependencyOutcome
@@ -101,59 +103,200 @@ class DependencyManager(private val projectJsonPath: Path) {
         targetVersion: String?,
         scope: String? = null,
         dryRun: Boolean = false,
+        registryUrl: String = "https://repo.maven.apache.org/maven2",
     ): DependencyOutcome {
         val configResult = ProjectConfigParser.load(projectJsonPath, strictUnknownFields = false)
         if (!configResult.isValid || configResult.config == null) {
             return DependencyOutcome.Failure("Unable to parse project.json")
         }
-        
+
         val config = configResult.config
-        
+        val versionResolver = MavenCentralVersionResolver()
+
         if (coordinate == null) {
-            // Upgrade all - for now, just return success (full implementation would resolve new versions)
-            return DependencyOutcome.Success("No coordinate specified; all dependencies are up to date")
+            // Upgrade all dependencies to latest
+            return upgradeAllToLatest(config, versionResolver, registryUrl, scope, dryRun)
         }
-        
+
         if (targetVersion == null) {
-            // Coordinate but no version - no-op
-            return DependencyOutcome.Success("No target version specified; no upgrades performed")
+            // Coordinate provided but no version - resolve to latest
+            return upgradeToLatest(config, coordinate, versionResolver, registryUrl, scope, dryRun)
         }
-        
+
+        // Explicit version provided
+        return upgradeToVersion(config, coordinate, targetVersion, scope, dryRun)
+    }
+
+    private fun upgradeAllToLatest(
+        config: ProjectConfig,
+        versionResolver: MavenCentralVersionResolver,
+        registryUrl: String,
+        scope: String?,
+        dryRun: Boolean,
+    ): DependencyOutcome {
+        var updatedConfig = config
+        val upgrades = mutableListOf<Pair<String, String>>()  // old -> new
+        var failed = false
+
+        if (scope == null || scope == "runtime") {
+            val (newDeps, upgradedPairs, hadFailure) = upgradeListToLatest(config.deps, versionResolver, registryUrl)
+            updatedConfig = updatedConfig.copy(deps = newDeps)
+            upgrades.addAll(upgradedPairs)
+            failed = failed || hadFailure
+        }
+
+        if (scope == null || scope == "test") {
+            val (newTestDeps, upgradedPairs, hadFailure) = upgradeListToLatest(config.testDeps, versionResolver, registryUrl)
+            updatedConfig = updatedConfig.copy(testDeps = newTestDeps)
+            upgrades.addAll(upgradedPairs)
+            failed = failed || hadFailure
+        }
+
+        if (upgrades.isEmpty()) {
+            return DependencyOutcome.Success("All dependencies already at latest versions")
+        }
+
+        val upgradeMessages = upgrades.joinToString("\n  ") { (oldDep, newDep) ->
+            val oldVersion = oldDep.substringAfterLast(":")
+            val newVersion = newDep.substringAfterLast(":")
+            "${oldDep.substringBeforeLast(":")}  $oldVersion -> $newVersion"
+        }
+
+        if (dryRun) {
+            return DependencyOutcome.Success("Dry run: would upgrade:\n  $upgradeMessages")
+        }
+
+        if (failed) {
+            return DependencyOutcome.Failure("Some dependencies could not be resolved; no updates applied")
+        }
+
+        return writeConfig(updatedConfig, "Multiple dependencies", "upgraded")
+    }
+
+    private fun upgradeListToLatest(
+        deps: List<String>,
+        versionResolver: MavenCentralVersionResolver,
+        registryUrl: String,
+    ): Triple<List<String>, List<Pair<String, String>>, Boolean> {
+        val newDeps = mutableListOf<String>()
+        val upgradedPairs = mutableListOf<Pair<String, String>>()
+        var hadFailure = false
+
+        for (dep in deps) {
+            try {
+                val coord = MavenCoordinate.parse(dep)
+                val versionInfo = versionResolver.resolveVersions(dep, registryUrl)
+
+                if (versionInfo.error != null || versionInfo.latest == null) {
+                    hadFailure = true
+                    newDeps.add(dep)  // Keep original on failure
+                } else if (versionInfo.latest != coord.version) {
+                    val newDep = "${coord.group}:${coord.artifact}:${versionInfo.latest}"
+                    newDeps.add(newDep)
+                    upgradedPairs.add(dep to newDep)
+                } else {
+                    newDeps.add(dep)
+                }
+            } catch (ex: Exception) {
+                hadFailure = true
+                newDeps.add(dep)
+            }
+        }
+
+        return Triple(newDeps, upgradedPairs, hadFailure)
+    }
+
+    private fun upgradeToLatest(
+        config: ProjectConfig,
+        coordinate: String,
+        versionResolver: MavenCentralVersionResolver,
+        registryUrl: String,
+        scope: String?,
+        dryRun: Boolean,
+    ): DependencyOutcome {
         val coordinateParts = coordinate.split(":")
         if (coordinateParts.size < 2) {
             return DependencyOutcome.Failure("Invalid coordinate: $coordinate")
         }
-        
+
         val searchPrefix = "${coordinateParts[0]}:${coordinateParts[1]}:"
-        
+
+        // Find the existing dependency
+        var existingDep: String? = null
+
+        if (scope == null || scope == "runtime") {
+            existingDep = config.deps.find { it.startsWith(searchPrefix) }
+        }
+
+        if (existingDep == null && (scope == null || scope == "test")) {
+            existingDep = config.testDeps.find { it.startsWith(searchPrefix) }
+        }
+
+        if (existingDep == null) {
+            return DependencyOutcome.Failure("Dependency not found: $coordinate")
+        }
+
+        // Resolve to latest version
+        val versionInfo = versionResolver.resolveVersions(existingDep, registryUrl)
+        if (versionInfo.error != null || versionInfo.latest == null) {
+            return DependencyOutcome.Failure("Could not resolve latest version: ${versionInfo.error ?: "Unknown error"}")
+        }
+
+        val coord = MavenCoordinate.parse(existingDep)
+        if (versionInfo.latest == coord.version) {
+            return DependencyOutcome.Success("$coordinate already at latest version (${versionInfo.latest})")
+        }
+
+        return upgradeToVersion(config, coordinate, versionInfo.latest, scope, dryRun)
+    }
+
+    private fun upgradeToVersion(
+        config: ProjectConfig,
+        coordinate: String,
+        targetVersion: String,
+        scope: String?,
+        dryRun: Boolean,
+    ): DependencyOutcome {
+        val coordinateParts = coordinate.split(":")
+        if (coordinateParts.size < 2) {
+            return DependencyOutcome.Failure("Invalid coordinate: $coordinate")
+        }
+
+        val searchPrefix = "${coordinateParts[0]}:${coordinateParts[1]}:"
+
         var updatedConfig = config
         var upgraded = false
-        
+        var oldDep: String? = null
+
         if (scope == null || scope == "runtime") {
-            val (newDeps, wasUpgraded, message) = upgradeInList(config.deps, searchPrefix, targetVersion)
+            val (newDeps, wasUpgraded, foundDep) = upgradeInList(config.deps, searchPrefix, targetVersion)
             if (wasUpgraded) {
                 updatedConfig = updatedConfig.copy(deps = newDeps)
                 upgraded = true
+                oldDep = foundDep
             }
         }
-        
-        if (scope == null || scope == "test") {
-            val (newTestDeps, wasUpgraded, message) = upgradeInList(config.testDeps, searchPrefix, targetVersion)
+
+        if (!upgraded && (scope == null || scope == "test")) {
+            val (newTestDeps, wasUpgraded, foundDep) = upgradeInList(config.testDeps, searchPrefix, targetVersion)
             if (wasUpgraded) {
                 updatedConfig = updatedConfig.copy(testDeps = newTestDeps)
                 upgraded = true
+                oldDep = foundDep
             }
         }
-        
+
         if (!upgraded) {
             return DependencyOutcome.Failure("Dependency not found: $coordinate")
         }
-        
+
+        val oldVersion = oldDep?.substringAfterLast(":") ?: "unknown"
+
         if (dryRun) {
-            return DependencyOutcome.Success("Dry run: would upgrade $coordinate")
+            return DependencyOutcome.Success("Dry run: would upgrade from $oldVersion to $targetVersion")
         }
-        
-        return writeConfig(updatedConfig, coordinate, "upgraded")
+
+        return writeConfig(updatedConfig, coordinate, "upgraded from $oldVersion -> $targetVersion")
     }
     
     private fun removeMatchingDeps(deps: List<String>, coordinate: String, isPartialMatch: Boolean): Pair<List<String>, Boolean> {
@@ -185,10 +328,10 @@ class DependencyManager(private val projectJsonPath: Path) {
         deps: List<String>,
         searchPrefix: String,
         targetVersion: String?,
-    ): Triple<List<String>, Boolean, String> {
+    ): Triple<List<String>, Boolean, String?> {
         val newDeps = mutableListOf<String>()
         var upgraded = false
-        var message = ""
+        var oldDep: String? = null
         
         for (dep in deps) {
             if (dep.startsWith(searchPrefix)) {
@@ -199,13 +342,13 @@ class DependencyManager(private val projectJsonPath: Path) {
                 }
                 newDeps.add(newDep)
                 upgraded = true
-                message = "Upgraded to $newDep"
+                oldDep = dep
             } else {
                 newDeps.add(dep)
             }
         }
         
-        return Triple(newDeps, upgraded, message)
+        return Triple(newDeps, upgraded, oldDep)
     }
     
     private fun writeConfig(updatedConfig: ProjectConfig, coordinate: String, action: String): DependencyOutcome {
