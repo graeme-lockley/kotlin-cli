@@ -14,6 +14,7 @@ import org.eclipse.aether.spi.connector.transport.TransporterFactory
 import org.eclipse.aether.transport.http.HttpTransporterFactory
 import org.eclipse.aether.util.repository.SimpleArtifactDescriptorPolicy
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils
+import java.nio.file.Files
 import java.nio.file.Path
 
 interface DependencyResolver {
@@ -84,6 +85,15 @@ class MavenDependencyResolver(
         val classpath = linkedSetOf<Path>()
         for (coordinate in coordinates) {
             MavenCoordinate.parse(coordinate)
+            
+            // Check if artifact is already cached locally
+            val cachedArtifact = findCachedArtifact(coordinate, session)
+            if (cachedArtifact != null) {
+                classpath.add(cachedArtifact)
+                continue
+            }
+            
+            // Only resolve from remote if not cached
             val collectRequest = CollectRequest().apply {
                 root = org.eclipse.aether.graph.Dependency(DefaultArtifact(coordinate), scope)
                 this.repositories = repositories
@@ -98,5 +108,22 @@ class MavenDependencyResolver(
         }
 
         return classpath.toList()
+    }
+
+    private fun findCachedArtifact(coordinate: String, session: org.eclipse.aether.RepositorySystemSession): Path? {
+        return try {
+            val artifact = DefaultArtifact(coordinate)
+            val localManager = session.localRepositoryManager
+            val localArtifactPath = localManager.getRepository().basedir.toPath()
+                .resolve(localManager.getPathForLocalArtifact(artifact))
+            
+            if (Files.exists(localArtifactPath)) {
+                localArtifactPath
+            } else {
+                null
+            }
+        } catch (ex: Exception) {
+            null
+        }
     }
 }
