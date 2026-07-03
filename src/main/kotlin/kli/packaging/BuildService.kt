@@ -81,9 +81,14 @@ class BuildService(
         val outputJar = outputOverride ?: projectRoot.resolve("dist").resolve("$artifact-${config.version}.jar")
         val resources = ResourceCollector.collect(projectRoot, config.resources)
         val dispatcherEntries = extractDispatcherEntries(layout.generatedDir)
+        
+        // Include Kotlin stdlib in the fat jar so the dispatcher can run
+        val kotlinStdlib = Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())
+        val allRuntimeDeps = (listOf(kotlinStdlib) + dependencies.runtimeClasspath).distinct()
+        
         jarBuilder.build(
             classesDir = layout.classesDir,
-            runtimeDependencies = dependencies.runtimeClasspath,
+            runtimeDependencies = allRuntimeDeps,
             additionalEntries = resources + dispatcherEntries,
             outputJar = outputJar,
             mainClass = DISPATCHER_MAIN_CLASS,

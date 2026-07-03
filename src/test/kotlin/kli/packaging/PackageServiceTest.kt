@@ -59,7 +59,8 @@ class PackageServiceTest {
         assertEquals(outputJar.toAbsolutePath().normalize(), result.outputJar.toAbsolutePath().normalize())
         assertEquals(outputJar.toAbsolutePath().normalize(), fakeJarBuilder.lastOutputJar?.toAbsolutePath()?.normalize())
         assertEquals("kli.dispatcher.MainDispatcherKt", fakeJarBuilder.lastMainClass)
-        assertTrue(fakeJarBuilder.lastRuntimeDependencies?.isEmpty() == true)
+        // Kotlin stdlib should be included for dispatcher to run
+        assertTrue(fakeJarBuilder.lastRuntimeDependencies?.isNotEmpty() == true, "Kotlin stdlib should be included")
         assertTrue(fakeJarBuilder.lastAdditionalEntries?.containsKey("config/app.conf") == true)
         assertEquals("io.kli.local", fakeInstaller.lastGroupId)
         assertEquals("demo", fakeInstaller.lastArtifact)
@@ -95,7 +96,11 @@ class PackageServiceTest {
         val result = service.build(outputOverride = root.resolve("dist/out.jar"))
 
         assertTrue(result is PackageOutcome.Success)
-        assertEquals(listOf(depJar), fakeJarBuilder.lastRuntimeDependencies)
+        // Kotlin stdlib should be included first, then user dependencies
+        val runtimeDeps = fakeJarBuilder.lastRuntimeDependencies
+        assertTrue(runtimeDeps?.isNotEmpty() == true)
+        // The last dependency should be the user's depJar (Kotlin stdlib is added first)
+        assertEquals(depJar, runtimeDeps?.last())
     }
 
     @Test

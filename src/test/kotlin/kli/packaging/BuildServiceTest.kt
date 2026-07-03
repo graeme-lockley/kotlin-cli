@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.jar.JarFile
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
@@ -110,5 +111,51 @@ class BuildServiceTest {
         
         assertIs<BuildOutcome.Failure>(result)
         assertEquals("No Kotlin source files found for building", result.message)
+    }
+
+    @Test
+    fun build_includes_kotlin_stdlib_for_dispatcher() {
+        // Create project with no dependencies to verify Kotlin stdlib is included
+        val projectJson = projectRoot.resolve("project.json")
+        projectJson.writeText("""
+            {
+              "name": "stdlib-test",
+              "version": "1.0.0",
+              "deps": [],
+              "testDeps": []
+            }
+        """.trimIndent())
+        
+        val mainDir = projectRoot.resolve("src").createDirectories()
+        mainDir.resolve("App.kt").writeText("""
+            package src
+            
+            fun main() {
+                println("App running")
+            }
+        """.trimIndent())
+        
+        val service = BuildService(cwd = { projectRoot })
+        val result = service.build(null)
+        
+        assertIs<BuildOutcome.Success>(result)
+        val outputJar = result.outputJar
+        
+        // Verify Kotlin stdlib classes are in the JAR
+        JarFile(outputJar.toFile()).use { jar ->
+            val entries = jar.entries().asSequence().map { it.name }.toSet()
+            
+            // Check for Kotlin stdlib classes
+            assertTrue(
+                entries.any { it.startsWith("kotlin/") && it.endsWith(".class") },
+                "Built JAR should contain Kotlin stdlib classes for dispatcher to run"
+            )
+            
+            // Check for dispatcher class
+            assertTrue(
+                entries.contains("kli/dispatcher/MainDispatcherKt.class"),
+                "Built JAR should contain dispatcher class"
+            )
+        }
     }
 }
