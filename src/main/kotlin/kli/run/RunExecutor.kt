@@ -102,6 +102,7 @@ class RunExecutor(
         val stdlibPath = kotlinStdlibPath()
         return buildList {
             add(plan.cacheLayout.classesDir)
+            add(plan.cacheLayout.resourcesDir)
             add(stdlibPath)
             addAll(plan.dependencies.runtimeClasspath)
         }.distinct()
