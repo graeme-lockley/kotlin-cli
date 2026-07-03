@@ -44,3 +44,31 @@ application {
 tasks.test {
     useJUnitPlatform()
 }
+
+// Fat JAR task for kli distribution
+tasks.jar {
+    archiveBaseName.set("kotlin-cli")
+    archiveVersion.set("")
+    archiveExtension.set("jar")
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    manifest {
+        attributes("Main-Class" to "kli.MainKt")
+    }
+    
+    from(sourceSets.main.get().output)
+    
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get()
+            .filter { it.exists() }
+            .map { if (it.isDirectory) it else zipTree(it) }
+    }) {
+        exclude("META-INF/MANIFEST.MF")
+        exclude("META-INF/*.SF")
+        exclude("META-INF/*.DSA")
+        exclude("META-INF/*.RSA")
+        exclude("META-INF/versions/**")
+    }
+}

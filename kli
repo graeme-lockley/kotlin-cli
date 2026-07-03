@@ -2,104 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_SCRIPT="$ROOT_DIR/build/scripts/kotlin-cli"
-APP_JAR="$(ls "$ROOT_DIR"/build/libs/kotlin-cli-*.jar 2>/dev/null | head -n 1 || true)"
-CACHE_FILE="$ROOT_DIR/build/.kli-classpath"
+FAT_JAR="$ROOT_DIR/build/libs/kotlin-cli.jar"
 
-FORCE_REFRESH="${KLI_REFRESH_CP:-0}"
-REFRESH_ONLY=0
-
-if [[ "${1:-}" == "refresh-classpath" ]]; then
-  FORCE_REFRESH=1
-  shift
-  if [[ $# -eq 0 ]]; then
-    REFRESH_ONLY=1
-  fi
+if [[ ! -f "$FAT_JAR" ]]; then
+    echo "error: kli fat jar not found at $FAT_JAR" >&2
+    echo "Run './gradlew build' to build the fat jar." >&2
+    exit 1
 fi
 
-if [[ -z "$APP_JAR" ]]; then
-  echo "error: no built kli jar found in build/libs" >&2
-  echo "run ./gradlew classes once to produce local build artifacts" >&2
-  exit 1
-fi
-
-use_cached_classpath() {
-  [[ -f "$CACHE_FILE" ]] || return 1
-  [[ "$CACHE_FILE" -nt "$APP_JAR" ]] || return 1
-  [[ "$CACHE_FILE" -nt "$BUILD_SCRIPT" ]] || return 1
-
-  local cached
-  cached="$(<"$CACHE_FILE")"
-  [[ -n "$cached" ]] || return 1
-
-  local cp_entry
-  IFS=':' read -r -a cp_entries <<< "$cached"
-  for cp_entry in "${cp_entries[@]}"; do
-    [[ -f "$cp_entry" ]] || return 1
-  done
-
-  CLASSPATH="$cached"
-  return 0
-}
-
-if [[ "$FORCE_REFRESH" != "1" ]] && use_cached_classpath; then
-  exec java -cp "$CLASSPATH" kli.MainKt "$@"
-fi
-
-if [[ ! -f "$BUILD_SCRIPT" ]]; then
-  echo "error: missing generated launcher metadata at build/scripts/kotlin-cli" >&2
-  echo "run ./gradlew startScripts once to generate dependency classpath metadata" >&2
-  exit 1
-fi
-
-classpath_line="$(grep '^CLASSPATH=' "$BUILD_SCRIPT" || true)"
-if [[ -z "$classpath_line" ]]; then
-  echo "error: could not read CLASSPATH from build/scripts/kotlin-cli" >&2
-  exit 1
-fi
-
-cp_entries=("$APP_JAR")
-missing_jars=()
-main_jar_name="$(basename "$APP_JAR")"
-
-classpath_spec="${classpath_line#CLASSPATH=}"
-IFS=':' read -r -a classpath_parts <<< "$classpath_spec"
-
-for part in "${classpath_parts[@]}"; do
-  jar_name="${part##*/}"
-
-  if [[ -z "$jar_name" || "$jar_name" == "$main_jar_name" ]]; then
-    continue
-  fi
-
-  if [[ -f "$ROOT_DIR/build/lib/$jar_name" ]]; then
-    cp_entries+=("$ROOT_DIR/build/lib/$jar_name")
-    continue
-  fi
-
-  cache_match="$(find "$HOME/.gradle/caches/modules-2/files-2.1" -type f -name "$jar_name" 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$cache_match" ]]; then
-    cp_entries+=("$cache_match")
-  else
-    missing_jars+=("$jar_name")
-  fi
-done
-
-if (( ${#missing_jars[@]} > 0 )); then
-  echo "error: missing dependency jars in local Gradle cache:" >&2
-  for jar in "${missing_jars[@]}"; do
-    echo "  - $jar" >&2
-  done
-  echo "run ./gradlew classes once to download/refresh dependencies" >&2
-  exit 1
-fi
-
-CLASSPATH="$(IFS=:; echo "${cp_entries[*]}")"
-printf '%s\n' "$CLASSPATH" > "$CACHE_FILE"
-
-if [[ "$REFRESH_ONLY" == "1" ]]; then
-  echo "refreshed classpath cache at $CACHE_FILE"
-  exit 0
-fi
-
-exec java -cp "$CLASSPATH" kli.MainKt "$@"
+exec java -jar "$FAT_JAR" "$@"
