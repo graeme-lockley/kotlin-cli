@@ -85,6 +85,7 @@ class InitCommandTest {
 
         assertEquals(0, code)
         val cliKtContent = projectDir.resolve("tools/CLI.kt").readText()
+        assertTrue(cliKtContent.contains("package tools"), "CLI.kt should contain package declaration")
         assertTrue(cliKtContent.contains("fun main()"), "CLI.kt should contain main function")
         assertTrue(cliKtContent.contains("println"), "CLI.kt should contain println")
     }

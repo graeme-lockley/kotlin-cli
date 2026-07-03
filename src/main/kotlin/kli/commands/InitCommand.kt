@@ -70,6 +70,8 @@ class InitCommand(
             }
 
             val cliKtContent = """
+                package tools
+                
                 fun main() {
                     println("Hello from $name!")
                 }
