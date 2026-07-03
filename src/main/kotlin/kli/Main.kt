@@ -83,6 +83,7 @@ fun runCli(args: Array<String>, cwd: () -> Path = CommandEnvironment::cwd): Int 
             ?: ex.message?.let { println(it) }
         ex.statusCode
     } catch (ex: UsageError) {
+        // All CLI usage errors exit with code 2 (invalid args, unknown command, etc.)
         ex.message?.let { System.err.println(it) }
         2
     } catch (ex: PrintMessage) {

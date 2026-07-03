@@ -17,9 +17,9 @@ import java.nio.file.Path
 
 class TestCommand(
     private val cwd: () -> Path,
-    private val testExecutorFactory: (Boolean, (Path, Long) -> Unit) -> TestExecutor = { showCompilerLogging, onCompiledSource ->
+    private val testExecutorFactory: (Boolean, Boolean, (Path, Long) -> Unit) -> TestExecutor = { showCompilerLogging, silent, onCompiledSource ->
         TestExecutor(
-            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging, silent = silent),
             onCompiledSource = onCompiledSource,
         )
     },
@@ -63,7 +63,7 @@ class TestCommand(
                 }
 
                 is TestWorkflowOutcome.Success -> {
-                    val testExecutor = testExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+                    val testExecutor = testExecutorFactory(showCompilerLogging, silent) { sourceFile, durationMs ->
                         if (!silent) {
                             echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
                         }

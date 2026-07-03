@@ -17,9 +17,9 @@ import java.nio.file.Path
 
 class RunCommand(
     private val cwd: () -> Path,
-    private val runExecutorFactory: (Boolean, (Path, Long) -> Unit) -> RunExecutor = { showCompilerLogging, onCompiledSource ->
+    private val runExecutorFactory: (Boolean, Boolean, (Path, Long) -> Unit) -> RunExecutor = { showCompilerLogging, silent, onCompiledSource ->
         RunExecutor(
-            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging, silent = silent),
             onCompiledSource = onCompiledSource,
         )
     },
@@ -67,7 +67,7 @@ class RunCommand(
                 }
 
                 is RunWorkflowOutcome.Success -> {
-                    val runExecutor = runExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+                    val runExecutor = runExecutorFactory(showCompilerLogging, silent) { sourceFile, durationMs ->
                         if (!silent) {
                             echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
                         }

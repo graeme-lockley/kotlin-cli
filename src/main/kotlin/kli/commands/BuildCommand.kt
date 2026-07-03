@@ -46,7 +46,7 @@ class BuildCommand(
                         echo(formatDependencyProgress(coordinate, durationMs))
                     }
                 },
-                compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+                compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging, silent = silent),
                 onCompiledSource = { sourceFile, durationMs ->
                     if (!silent) {
                         val root = cwd().toAbsolutePath().normalize()

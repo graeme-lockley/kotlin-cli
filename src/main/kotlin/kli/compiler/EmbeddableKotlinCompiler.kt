@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageRenderer
 import org.jetbrains.kotlin.cli.common.messages.PrintingMessageCollector
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
 import org.jetbrains.kotlin.config.Services
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
 import java.nio.file.Files
@@ -14,6 +15,7 @@ import java.nio.file.Path
 class EmbeddableKotlinCompiler(
     private val errorStream: PrintStream = System.err,
     private val verboseLogging: Boolean = false,
+    private val silent: Boolean = false,
 ) : KotlinCompiler {
     override fun compile(
         sourceFiles: List<Path>,
@@ -36,7 +38,13 @@ class EmbeddableKotlinCompiler(
             noReflect = true
         }
 
-        val collector = PrintingMessageCollector(errorStream, MessageRenderer.PLAIN_RELATIVE_PATHS, verboseLogging)
+        // Capture stderr if silent mode is enabled
+        val outputStream = if (silent) ByteArrayOutputStream() else errorStream
+        val collector = PrintingMessageCollector(
+            PrintStream(outputStream),
+            MessageRenderer.PLAIN_RELATIVE_PATHS,
+            verboseLogging
+        )
         val exitCode = K2JVMCompiler().exec(collector, Services.EMPTY, args)
 
         return when (exitCode) {
