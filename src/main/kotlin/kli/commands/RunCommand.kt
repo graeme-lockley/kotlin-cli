@@ -8,6 +8,7 @@ import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import kli.compiler.EmbeddableKotlinCompiler
+import kli.resolver.MavenDependencyResolver
 import kli.run.RunExecutionOutcome
 import kli.run.RunExecutor
 import kli.run.RunWorkflow
@@ -16,8 +17,11 @@ import java.nio.file.Path
 
 class RunCommand(
     private val cwd: () -> Path,
-    private val runExecutorFactory: (Boolean) -> RunExecutor = { showCompilerLogging ->
-        RunExecutor(compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging))
+    private val runExecutorFactory: (Boolean, (Path, Long) -> Unit) -> RunExecutor = { showCompilerLogging, onCompiledSource ->
+        RunExecutor(
+            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+            onCompiledSource = onCompiledSource,
+        )
     },
 ) : CliktCommand(name = "run") {
     override fun help(context: Context): String {
@@ -36,10 +40,20 @@ class RunCommand(
         "--show-compiler-logging",
         help = "Show Kotlin compiler diagnostic logging during compilation",
     ).flag(default = false)
+    private val silent by option(
+        "--silent",
+        help = "Hide compile and dependency progress output",
+    ).flag(default = false)
 
     override fun run() {
-        val workflow = RunWorkflow(cwd)
-        val runExecutor = runExecutorFactory(showCompilerLogging)
+        val workflow = RunWorkflow(
+            cwd = cwd,
+            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
+                if (!silent) {
+                    echo(formatDependencyProgress(coordinate, durationMs))
+                }
+            },
+        )
         when (val result = workflow.prepare(mainClass, programArgs)) {
             is RunWorkflowOutcome.Failure -> {
                 result.errors.forEach { echo("error: $it", err = true) }
@@ -47,6 +61,11 @@ class RunCommand(
             }
 
             is RunWorkflowOutcome.Success -> {
+                val runExecutor = runExecutorFactory(showCompilerLogging) { sourceFile, durationMs ->
+                    if (!silent) {
+                        echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
+                    }
+                }
                 when (val execution = runExecutor.execute(result.plan)) {
                     is RunExecutionOutcome.Success -> {
                         if (execution.exitCode != 0) {

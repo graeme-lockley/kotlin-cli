@@ -30,6 +30,7 @@ class PackageService(
     private val jarBuilder: JarBuilder = SimpleJarBuilder(),
     private val installer: MavenInstaller = LocalMavenInstaller(),
     private val userHome: String = System.getProperty("user.home"),
+    private val onCompiledSource: (Path, Long) -> Unit = { _, _ -> },
 ) {
     fun build(outputOverride: Path?): PackageOutcome {
         val projectRoot = ProjectRootFinder.find(cwd())
@@ -60,12 +61,19 @@ class PackageService(
             addAll(dependencies.runtimeClasspath)
         }.distinct()
 
+        val startNanos = System.nanoTime()
         val compilation = compiler.compile(
             sourceFiles = sourceFiles,
             outputDirectory = layout.classesDir,
             classpath = compileClasspath,
             jvmTarget = config.target,
         )
+        val durationMs = (System.nanoTime() - startNanos) / 1_000_000
+        sourceFiles
+            .map { it.toAbsolutePath().normalize() }
+            .distinct()
+            .sortedBy { it.toString() }
+            .forEach { source -> onCompiledSource(source, durationMs) }
 
         if (!compilation.success) {
             return PackageOutcome.Failure(compilation.message ?: "Compilation failed")

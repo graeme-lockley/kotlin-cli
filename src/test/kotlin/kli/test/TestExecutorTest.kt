@@ -14,6 +14,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class TestExecutorTest {
@@ -64,6 +65,66 @@ class TestExecutorTest {
         assertEquals("enabled=true", copied.readText())
     }
 
+    @Test
+    fun reports_compiled_sources_with_duration_when_recompiling() {
+        val plan = createPlan()
+        val compiler = FakeCompiler(CompilationResult(success = true))
+        val runner = FakeRunner(0)
+        val events = mutableListOf<Pair<Path, Long>>()
+        val executor = TestExecutor(
+            compiler = compiler,
+            programRunner = runner,
+            manifestStore = ManifestStore(),
+            onCompiledSource = { file, durationMs -> events += file to durationMs },
+        )
+
+        val result = executor.execute(plan)
+
+        assertTrue(result is TestExecutionOutcome.Success)
+        assertTrue(events.isNotEmpty())
+        assertTrue(events.all { it.second >= 0 })
+    }
+
+    @Test
+    fun recompiles_only_changed_test_source_on_subsequent_runs() {
+        val plan = createPlan()
+        val compiler = RecordingCompiler(CompilationResult(success = true))
+        val runner = FakeRunner(0)
+        val store = ManifestStore()
+        val executor = TestExecutor(compiler, runner, store)
+
+        val first = executor.execute(plan)
+        assertTrue(first is TestExecutionOutcome.Success)
+        assertTrue(compiler.lastSourceFiles.any { it.fileName.toString() == "AppTest.kt" })
+
+        compiler.lastSourceFiles = emptyList()
+        val testFile = plan.selectedTests.first()
+        testFile.writeText("class AppTest { fun changed() = true }")
+
+        val second = executor.execute(plan)
+        assertTrue(second is TestExecutionOutcome.Success)
+        assertEquals(listOf(testFile.toAbsolutePath().normalize()), compiler.lastSourceFiles)
+    }
+
+    @Test
+    fun reports_non_null_error_message_when_runner_exception_has_no_message() {
+        val plan = createPlan()
+        val compiler = FakeCompiler(CompilationResult(success = true))
+        val runner = object : ProgramRunner {
+            override fun run(mainClass: String, classpath: List<Path>, programArgs: List<String>): Int {
+                throw IllegalStateException()
+            }
+        }
+        val executor = TestExecutor(compiler, runner, ManifestStore())
+
+        val result = executor.execute(plan)
+
+        assertTrue(result is TestExecutionOutcome.Failure)
+        val message = (result as TestExecutionOutcome.Failure).message
+        assertNotEquals("Test execution failed: null", message)
+        assertTrue(message.startsWith("Test execution failed:"))
+    }
+
     private fun createPlan(resources: List<String> = emptyList()): TestPlan {
         val root = Files.createTempDirectory("kli-test-executor")
         val source = root.resolve("tools/App.kt")
@@ -105,6 +166,25 @@ class TestExecutorTest {
                 Files.createDirectories(classFile.parent)
                 classFile.writeText("bytecode")
             }
+            return result
+        }
+    }
+
+    private class RecordingCompiler(
+        private val result: CompilationResult,
+    ) : KotlinCompiler {
+        var lastSourceFiles: List<Path> = emptyList()
+
+        override fun compile(
+            sourceFiles: List<Path>,
+            outputDirectory: Path,
+            classpath: List<Path>,
+            jvmTarget: String,
+        ): CompilationResult {
+            lastSourceFiles = sourceFiles.map { it.toAbsolutePath().normalize() }.sortedBy { it.toString() }
+            val classFile = outputDirectory.resolve("__test_runner__/TestRunnerKt.class")
+            Files.createDirectories(classFile.parent)
+            classFile.writeText("bytecode")
             return result
         }
     }

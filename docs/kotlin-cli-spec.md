@@ -22,7 +22,7 @@ Kotlin is a great language burdened by terrible project tooling. Gradle and Mave
 
 ## 2. Commands
 
-### 2.1 `kli run [--show-compiler-logging] <qualified-name>`
+### 2.1 `kli run [--show-compiler-logging] [--silent] <qualified-name>`
 
 Compiles all stale source files in the project, then runs the specified main class.
 
@@ -31,6 +31,7 @@ kli run tools.Server
 kli run scripts.Migrate
 kli run services.MyApp
 kli run --show-compiler-logging tools.Server
+kli run --silent tools.Server
 ```
 
 The `<qualified-name>` maps to a source file by convention:
@@ -64,6 +65,17 @@ kli run tools.Server -- --port 8080 --db-url jdbc:postgresql://localhost/mydb
 - Add `--show-compiler-logging` to print Kotlin compiler diagnostic logging during compilation.
 - Default behaviour keeps compiler diagnostic logging quiet unless there is an error.
 
+**Progress output:**
+- By default, kli prints light-gray progress lines with elapsed durations for dependency downloads and compile work.
+- Example:
+
+```
+Compiling format.test.kt (53ms)
+Downloading com.google.code.gson:gson:2.13.1 (18ms)
+```
+
+- Use `--silent` to hide these progress lines.
+
 **Shebang support:**
 Since Kotlin's lexer discards `#!` at the top of a file, source files with a shebang work directly:
 
@@ -76,7 +88,7 @@ fun main() {
 
 Make it executable (`chmod +x`) and run as `./tools/CLI.kt`.
 
-### 2.2 `kli test [--show-compiler-logging] [path]`
+### 2.2 `kli test [--show-compiler-logging] [--silent] [path]`
 
 Discovers and runs tests authored with `kotlin.test` annotations. Without arguments, discovers all `*Test.kt` files under configured source roots.
 
@@ -85,14 +97,48 @@ kli test                           # run all tests in the project
 kli test tools/SomeServiceTest.kt  # run tests in a single file
 kli test tools/                    # run tests in a directory
 kli test --show-compiler-logging   # include compiler diagnostic logging
+kli test --silent                  # hide compile/dependency progress lines
 ```
 
 **Behaviour:**
 1. Discover matching test files (glob: `**/*Test.kt`)
 2. Generate a synthetic top-level test runner file that bundles all discovered tests
 3. Compile and execute via a generated JUnit 5 runner that invokes tests written with `kotlin.test`
-4. Report results to stdout with clear pass/fail output
+4. Report results to stdout with class-level summaries, attributed stdout lines, and detailed failure locations
 5. Exit code 0 = all pass, non-zero = failures
+
+**Test output format (summary-first):**
+- Class-level summary lines (fully-qualified class name):
+
+```
+tool.HelloTest (✓2 9ms)
+tool.AddTest (✗1 10ms)
+```
+
+- Per-test stdout/stderr attribution prefix:
+
+```
+tool/HelloTest.kt tool.HelloTest testHello | hello
+```
+
+- Final compact total line:
+
+```
+2 test file(s), 2 passed (133ms)
+2 test file(s), 1 passed, 1 failed (133ms)
+```
+
+- Failure details include class + test name and file:line location:
+
+```
+Fail 1: tool.HelloTest.testHello
+  at tool/HelloTest.kt:9
+  expected: <true> but was: <false>
+```
+
+Notes:
+- Counts with value `0` are hidden where possible to reduce noise.
+- Location and attribution prefixes are rendered in light gray for readability.
 
 **Why generate a synthetic runner if JUnit is used?**
 - Keeps test orchestration in kli (discovery, filtering, reporting)
@@ -171,13 +217,14 @@ kli refresh
 2. Re-resolve all Maven dependencies
 3. Recompile all source files (cache invalidated)
 
-### 2.8 `kli package [--output <path>] [--show-compiler-logging]`
+### 2.8 `kli package [--output <path>] [--show-compiler-logging] [--silent]`
 
 Builds a distributable fat JAR with all discovered mains and installs it into the local Maven repository cache (`~/.kli/m2/`).
 
 ```
 kli package --output ./dist/my-project.jar
 kli package --show-compiler-logging
+kli package --silent
 ```
 
 **Behaviour:**
@@ -231,6 +278,7 @@ java -jar ./dist/app.jar tools.CLI
 | `kli refresh` | Dependencies refreshed and project rebuilt | Refresh/build failed | CLI usage error |
 | `kli build --output <path>` | JAR built successfully | Build failed | CLI usage error |
 | `kli package [--output <path>]` | JAR built and installed to `~/.kli/m2/` | Build/install failed | CLI usage error |
+| `--silent` flag on run/test/package | Hides light-gray dependency/compile progress lines | n/a | n/a |
 | `kli publish [--registry <url>]` | Artifact published | Publish failed | CLI usage error |
 
 ---

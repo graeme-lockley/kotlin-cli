@@ -40,6 +40,42 @@ object IncrementalCompilation {
         return hash.joinToString(separator = "") { "%02x".format(it) }
     }
 
+    fun hasClassFiles(classesDir: Path): Boolean {
+        if (!Files.isDirectory(classesDir)) {
+            return false
+        }
+        return Files.walk(classesDir).use { stream ->
+            stream.anyMatch { path -> Files.isRegularFile(path) && path.toString().endsWith(".class") }
+        }
+    }
+
+    fun changedSourceKeys(
+        manifest: CompilationManifest?,
+        sourceHashes: Map<String, String>,
+    ): Set<String> {
+        if (manifest == null) {
+            return sourceHashes.keys
+        }
+        return sourceHashes.keys.filterTo(linkedSetOf()) { key ->
+            manifest.sourceHashes[key] != sourceHashes[key]
+        }
+    }
+
+    fun requiresFullRecompile(
+        manifest: CompilationManifest?,
+        sourceHashes: Map<String, String>,
+        classpathFingerprint: String,
+        configFingerprint: String,
+    ): Boolean {
+        if (manifest == null) {
+            return true
+        }
+        if (manifest.classpathFingerprint != classpathFingerprint || manifest.configFingerprint != configFingerprint) {
+            return true
+        }
+        return manifest.sourceHashes.keys.any { it !in sourceHashes }
+    }
+
     fun isUpToDate(
         manifest: CompilationManifest?,
         sourceHashes: Map<String, String>,
@@ -50,13 +86,7 @@ object IncrementalCompilation {
         if (manifest == null) {
             return false
         }
-        if (!Files.isDirectory(classesDir)) {
-            return false
-        }
-        val hasClassFiles = Files.walk(classesDir).use { stream ->
-            stream.anyMatch { path -> Files.isRegularFile(path) && path.toString().endsWith(".class") }
-        }
-        if (!hasClassFiles) {
+        if (!hasClassFiles(classesDir)) {
             return false
         }
 

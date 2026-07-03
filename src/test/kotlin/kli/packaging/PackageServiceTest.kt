@@ -98,6 +98,33 @@ class PackageServiceTest {
         assertEquals(listOf(depJar), fakeJarBuilder.lastRuntimeDependencies)
     }
 
+    @Test
+    fun reports_compiled_sources_with_duration() {
+        val root = Files.createTempDirectory("kli-package-progress")
+        Files.writeString(root.resolve("project.json"), "{\"name\":\"demo\",\"version\":\"1.2.3\",\"deps\":[]}")
+        val toolsDir = Files.createDirectories(root.resolve("tools"))
+        val sourceFile = toolsDir.resolve("Server.kt")
+        Files.writeString(sourceFile, "fun main() {}")
+
+        val events = mutableListOf<Pair<Path, Long>>()
+        val service = PackageService(
+            cwd = { root },
+            dependencyResolver = FakeResolver(),
+            compiler = FakeCompiler(CompilationResult(true)),
+            jarBuilder = FakeJarBuilder(),
+            installer = FakeInstaller(),
+            userHome = Files.createTempDirectory("kli-home").toString(),
+            onCompiledSource = { file, durationMs -> events += file to durationMs },
+        )
+
+        val result = service.build(outputOverride = root.resolve("dist/out.jar"))
+
+        assertTrue(result is PackageOutcome.Success)
+        assertEquals(1, events.size)
+        assertEquals(sourceFile.toAbsolutePath().normalize(), events.first().first)
+        assertTrue(events.first().second >= 0)
+    }
+
     private class FakeResolver : DependencyResolver {
         override fun resolve(config: ProjectConfig): DependencyResolutionResult {
             return DependencyResolutionResult(runtimeClasspath = emptyList(), testClasspath = emptyList())

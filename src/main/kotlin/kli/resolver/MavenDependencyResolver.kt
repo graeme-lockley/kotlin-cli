@@ -22,6 +22,7 @@ interface DependencyResolver {
 
 class MavenDependencyResolver(
     private val userHome: String = System.getProperty("user.home"),
+    private val onDependencyDownloaded: (String, Long) -> Unit = { _, _ -> },
 ) : DependencyResolver {
     override fun resolve(config: ProjectConfig): DependencyResolutionResult {
         val repositorySystem = createRepositorySystem()
@@ -87,7 +88,10 @@ class MavenDependencyResolver(
                 root = org.eclipse.aether.graph.Dependency(DefaultArtifact(coordinate), scope)
                 this.repositories = repositories
             }
+            val startNanos = System.nanoTime()
             val result = repositorySystem.resolveDependencies(session, DependencyRequest(collectRequest, null))
+            val durationMs = (System.nanoTime() - startNanos) / 1_000_000
+            onDependencyDownloaded(coordinate, durationMs)
             result.artifactResults
                 .mapNotNull { it.artifact?.file?.toPath() }
                 .forEach { classpath.add(it) }

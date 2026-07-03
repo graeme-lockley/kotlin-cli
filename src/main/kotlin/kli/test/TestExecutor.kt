@@ -29,6 +29,7 @@ class TestExecutor(
     private val compiler: KotlinCompiler = EmbeddableKotlinCompiler(),
     private val programRunner: ProgramRunner = ReflectiveProgramRunner(),
     private val manifestStore: ManifestStore = ManifestStore(),
+    private val onCompiledSource: (Path, Long) -> Unit = { _, _ -> },
 ) {
     fun execute(plan: TestPlan): TestExecutionOutcome {
         if (plan.selectedTests.isEmpty()) {
@@ -38,6 +39,7 @@ class TestExecutor(
         val runnerSource = TestRunnerGenerator.generate(
             classesDir = plan.cacheLayout.classesDir,
             outputFile = plan.cacheLayout.generatedDir.resolve("TestRunner.kt"),
+            selectedTestFilesCount = plan.selectedTests.size,
         )
 
         val resourceFiles = syncResources(plan)
@@ -57,10 +59,22 @@ class TestExecutor(
         val sourceHashes = computeFileHashes(compileSources)
         val resourceHashes = computeFileHashes(resourceFiles)
         val allHashes = (sourceHashes + resourceHashes).toSortedMap()
+        val compileSourceByKey = compileSources.associateBy { it.toString() }
         val classpathFingerprint = IncrementalCompilation.classpathFingerprint(compileClasspath)
         val configFingerprint = testConfigFingerprint(plan)
         val manifestFile = plan.cacheLayout.projectCacheDir.resolve("test-manifest.json")
         val existingManifest = manifestStore.load(manifestFile)
+        val requiresFullRecompile = IncrementalCompilation.requiresFullRecompile(
+            manifest = existingManifest,
+            sourceHashes = allHashes,
+            classpathFingerprint = classpathFingerprint,
+            configFingerprint = configFingerprint,
+        )
+        val changedSourceKeys = IncrementalCompilation.changedSourceKeys(existingManifest, allHashes)
+        val changedCompileSources = changedSourceKeys
+            .mapNotNull { key -> compileSourceByKey[key] }
+            .sortedBy { it.toString() }
+        val classesMissing = !IncrementalCompilation.hasClassFiles(plan.cacheLayout.classesDir)
 
         val upToDate = IncrementalCompilation.isUpToDate(
             manifest = existingManifest,
@@ -71,14 +85,25 @@ class TestExecutor(
         )
 
         if (!upToDate) {
-            val compilation = compiler.compile(
-                sourceFiles = compileSources,
-                outputDirectory = plan.cacheLayout.classesDir,
-                classpath = compileClasspath,
-                jvmTarget = plan.config.target,
-            )
-            if (!compilation.success) {
-                return TestExecutionOutcome.Failure(compilation.message ?: "Compilation failed")
+            val compileTargets = when {
+                requiresFullRecompile || classesMissing -> compileSources
+                changedCompileSources.isNotEmpty() -> changedCompileSources
+                else -> emptyList()
+            }
+
+            if (compileTargets.isNotEmpty()) {
+                val startNanos = System.nanoTime()
+                val compilation = compiler.compile(
+                    sourceFiles = compileTargets,
+                    outputDirectory = plan.cacheLayout.classesDir,
+                    classpath = compileClasspath,
+                    jvmTarget = plan.config.target,
+                )
+                val durationMs = (System.nanoTime() - startNanos) / 1_000_000
+                compileTargets.forEach { source -> onCompiledSource(source, durationMs) }
+                if (!compilation.success) {
+                    return TestExecutionOutcome.Failure(compilation.message ?: "Compilation failed")
+                }
             }
 
             manifestStore.save(
@@ -96,12 +121,20 @@ class TestExecutor(
             programRunner.run("__test_runner__.TestRunnerKt", runtimeClasspath, emptyList())
             TestExecutionOutcome.Success(discoveredTests = plan.selectedTests.size)
         } catch (ex: Exception) {
-            TestExecutionOutcome.Failure("Test execution failed: ${ex.message}")
+            val detail = generateSequence(ex as Throwable?) { it.cause }
+                .mapNotNull { throwable ->
+                    throwable.message?.takeIf { it.isNotBlank() }
+                }
+                .firstOrNull()
+                ?: ex::class.simpleName
+                ?: "Unknown error"
+            TestExecutionOutcome.Failure("Test execution failed: $detail")
         }
     }
 
     private fun buildCompileClasspath(plan: TestPlan): List<Path> {
         return buildList {
+            add(plan.cacheLayout.classesDir)
             add(kotlinStdlibPath())
             addAll(testFrameworkClasspath())
             addAll(plan.dependencies.runtimeClasspath)

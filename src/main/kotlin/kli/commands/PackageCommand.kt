@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.types.path
 import kli.compiler.EmbeddableKotlinCompiler
 import kli.packaging.PackageOutcome
 import kli.packaging.PackageService
+import kli.resolver.MavenDependencyResolver
 import java.nio.file.Path
 
 class PackageCommand(
@@ -26,11 +27,26 @@ class PackageCommand(
         "--show-compiler-logging",
         help = "Show Kotlin compiler diagnostic logging during packaging compilation",
     ).flag(default = false)
+    private val silent by option(
+        "--silent",
+        help = "Hide compile and dependency progress output",
+    ).flag(default = false)
 
     override fun run() {
         val service = PackageService(
             cwd = cwd,
+            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
+                if (!silent) {
+                    echo(formatDependencyProgress(coordinate, durationMs))
+                }
+            },
             compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+            onCompiledSource = { sourceFile, durationMs ->
+                if (!silent) {
+                    val root = cwd().toAbsolutePath().normalize()
+                    echo(formatCompileProgress(root, sourceFile, durationMs))
+                }
+            },
         )
         when (val result = service.build(outputPath)) {
             is PackageOutcome.Success -> {
