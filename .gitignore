@@ -1,1 +1,12 @@
 .DS_Store
+.gradle/
+.kotlin/
+build/
+out/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Local environment files
+local.properties
