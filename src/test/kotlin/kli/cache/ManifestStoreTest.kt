@@ -24,6 +24,7 @@ class ManifestStoreTest {
         val expected = CompilationManifest(
             sourceHashes = mapOf("tools/Server.kt" to "abc123"),
             classpathFingerprint = "cp123",
+            configFingerprint = "cfg123",
         )
 
         store.save(file, expected)
@@ -32,5 +33,6 @@ class ManifestStoreTest {
         assertNotNull(loaded)
         assertEquals(expected.sourceHashes, loaded.sourceHashes)
         assertEquals(expected.classpathFingerprint, loaded.classpathFingerprint)
+        assertEquals(expected.configFingerprint, loaded.configFingerprint)
     }
 }

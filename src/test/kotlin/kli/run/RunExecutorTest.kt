@@ -75,6 +75,7 @@ class RunExecutorTest {
                 classpathFingerprint = kli.cache.IncrementalCompilation.classpathFingerprint(
                     listOf(Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())),
                 ),
+                configFingerprint = kli.cache.IncrementalCompilation.configFingerprint(plan.config),
             ),
         )
         val executor = RunExecutor(compiler, runner, store)
@@ -83,6 +84,41 @@ class RunExecutorTest {
 
         assertTrue(result is RunExecutionOutcome.Success)
         assertEquals(0, compiler.invocations)
+        assertEquals(1, runner.invocations)
+    }
+
+    @Test
+    fun recompiles_when_config_fingerprint_changes() {
+        val projectRoot = Files.createTempDirectory("kli-run-exec-config-change")
+        val source = projectRoot.resolve("tools/Server.kt")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "fun main() {}")
+
+        val plan = createPlan(projectRoot, listOf(source), mainClass = "tools.Server")
+        val classFile = plan.cacheLayout.classesDir.resolve("tools/ServerKt.class")
+        Files.createDirectories(classFile.parent)
+        Files.writeString(classFile, "bytecode")
+
+        val compiler = CountingCompiler(CompilationResult(success = true))
+        val runner = FakeRunner(0)
+        val store = ManifestStore()
+        val sourceHash = kli.cache.SourceHasher.sha256(source)
+        store.save(
+            plan.cacheLayout.manifestFile,
+            CompilationManifest(
+                sourceHashes = mapOf("tools/Server.kt" to sourceHash),
+                classpathFingerprint = kli.cache.IncrementalCompilation.classpathFingerprint(
+                    listOf(Path.of(kotlin.Unit::class.java.protectionDomain.codeSource.location.toURI())),
+                ),
+                configFingerprint = "outdated-config",
+            ),
+        )
+
+        val executor = RunExecutor(compiler, runner, store)
+        val result = executor.execute(plan)
+
+        assertTrue(result is RunExecutionOutcome.Success)
+        assertEquals(1, compiler.invocations)
         assertEquals(1, runner.invocations)
     }
 

@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.core.subcommands
 import kli.commands.CleanAllCommand
 import kli.commands.CleanCommand
 import kli.commands.CommandEnvironment
+import kli.commands.PackageCommand
 import kli.commands.ProjectLintCommand
 import kli.commands.RunCommand
 
@@ -22,6 +23,7 @@ fun main(args: Array<String>) {
             CleanCommand(CommandEnvironment::cwd),
             CleanAllCommand(),
             RunCommand(CommandEnvironment::cwd),
+            PackageCommand(CommandEnvironment::cwd),
         )
     .main(args)
 }

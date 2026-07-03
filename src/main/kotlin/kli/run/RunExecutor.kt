@@ -27,12 +27,14 @@ class RunExecutor(
         val compileClasspath = buildCompileClasspath(plan)
         val sourceHashes = IncrementalCompilation.computeSourceHashes(plan.projectRoot, plan.sourceFiles)
         val classpathFingerprint = IncrementalCompilation.classpathFingerprint(compileClasspath)
+        val configFingerprint = IncrementalCompilation.configFingerprint(plan.config)
         val existingManifest = manifestStore.load(plan.cacheLayout.manifestFile)
 
         val upToDate = IncrementalCompilation.isUpToDate(
             manifest = existingManifest,
             sourceHashes = sourceHashes,
             classpathFingerprint = classpathFingerprint,
+            configFingerprint = configFingerprint,
             classesDir = plan.cacheLayout.classesDir,
         )
 
@@ -53,6 +55,7 @@ class RunExecutor(
                 CompilationManifest(
                     sourceHashes = sourceHashes,
                     classpathFingerprint = classpathFingerprint,
+                    configFingerprint = configFingerprint,
                 ),
             )
         }

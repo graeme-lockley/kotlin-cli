@@ -1,5 +1,6 @@
 package kli.cache
 
+import kli.project.ProjectConfig
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -22,10 +23,28 @@ object IncrementalCompilation {
         }
     }
 
+    fun configFingerprint(config: ProjectConfig): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val payload = buildString {
+            append(config.target)
+            append('|')
+            append(config.sources.sorted().joinToString(","))
+            append('|')
+            append(config.deps.sorted().joinToString(","))
+            append('|')
+            append(config.repos.sorted().joinToString(","))
+            append('|')
+            append(config.jvmArgs.joinToString(","))
+        }
+        val hash = digest.digest(payload.toByteArray(Charsets.UTF_8))
+        return hash.joinToString(separator = "") { "%02x".format(it) }
+    }
+
     fun isUpToDate(
         manifest: CompilationManifest?,
         sourceHashes: Map<String, String>,
         classpathFingerprint: String,
+        configFingerprint: String,
         classesDir: Path,
     ): Boolean {
         if (manifest == null) {
@@ -41,6 +60,8 @@ object IncrementalCompilation {
             return false
         }
 
-        return manifest.classpathFingerprint == classpathFingerprint && manifest.sourceHashes == sourceHashes
+        return manifest.classpathFingerprint == classpathFingerprint &&
+            manifest.configFingerprint == configFingerprint &&
+            manifest.sourceHashes == sourceHashes
     }
 }
