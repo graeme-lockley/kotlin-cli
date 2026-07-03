@@ -45,6 +45,20 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// Generate version.txt resource
+tasks.register("generateVersionResource") {
+    doLast {
+        val resourceDir = layout.buildDirectory.dir("resources/main").get().asFile
+        resourceDir.mkdirs()
+        File(resourceDir, "version.txt").writeText(project.version.toString())
+    }
+}
+
+// Ensure version resource is generated before compilation
+tasks.compileKotlin {
+    dependsOn("generateVersionResource")
+}
+
 // Fat JAR task for kli distribution
 tasks.jar {
     archiveBaseName.set("kotlin-cli")

@@ -23,9 +23,15 @@ class InitCommand(
     override fun run() {
         val projectDir = if (projectName != null) {
             val dir = cwd().resolve(projectName!!)
+            if (Files.exists(dir.resolve("project.json"))) {
+                fail("Project already exists at ${dir.toAbsolutePath()}. Cannot initialize.")
+            }
             Files.createDirectories(dir)
             dir
         } else {
+            if (Files.exists(cwd().resolve("project.json"))) {
+                fail("Project already exists. Cannot initialize current directory.")
+            }
             cwd()
         }
 
@@ -70,12 +76,8 @@ class InitCommand(
 
         // Create .gitignore
         val gitignoreContent = """
-            # Kotlin CLI build artifacts
-            .kotlin/
-            build/
             dist/
             *.jar
-            *.class
         """.trimIndent()
 
         val gitignorePath = projectDir.resolve(".gitignore")

@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import kli.cache.CacheCleaner
 import kli.project.DependencyManager
 import kli.project.ProjectRootFinder
 import java.nio.file.Path
@@ -128,15 +129,16 @@ class DependencyAddSubcommand(private val cwd: () -> Path) : CliktCommand(name =
     }
 
     override fun run() {
-        if (!coordinate.contains(":")) {
-            echo("error: Invalid coordinate. Format: group:artifact:version", err = true)
+        val colonCount = coordinate.count { it == ':' }
+        if (colonCount < 2) {
+            echo("error: Invalid coordinate. Format: group:artifact:version (requires exactly 2 colons)", err = true)
             throw ProgramResult(2)
         }
 
         val projectRoot = ProjectRootFinder.find(cwd())
             ?: run {
                 echo("error: No project.json found", err = true)
-                throw ProgramResult(1)
+                throw ProgramResult(2)
             }
 
         val manager = DependencyManager(projectRoot.resolve("project.json"))
@@ -147,7 +149,7 @@ class DependencyAddSubcommand(private val cwd: () -> Path) : CliktCommand(name =
             is kli.project.DependencyOutcome.Success -> {
                 echo("✓ ${outcome.message}")
                 if (!noClean) {
-                    // Run clean command
+                    CacheCleaner.cleanProject(projectRoot)
                     echo("✓ Cache cleaned")
                 }
             }
@@ -184,6 +186,7 @@ class DependencyRemoveSubcommand(private val cwd: () -> Path) : CliktCommand(nam
             is kli.project.DependencyOutcome.Success -> {
                 echo("✓ ${outcome.message}")
                 if (!noClean) {
+                    CacheCleaner.cleanProject(projectRoot)
                     echo("✓ Cache cleaned")
                 }
             }
@@ -224,6 +227,7 @@ class DependencyUpgradeSubcommand(private val cwd: () -> Path) : CliktCommand(na
             is kli.project.DependencyOutcome.Success -> {
                 echo("✓ ${outcome.message}")
                 if (!dryRun && !noClean) {
+                    CacheCleaner.cleanProject(projectRoot)
                     echo("✓ Cache cleaned")
                 }
             }

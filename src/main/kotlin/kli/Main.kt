@@ -25,7 +25,20 @@ import kli.commands.TestCommand
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
-private const val VERSION = "0.1.0"
+private val VERSION = loadVersion()
+
+private fun loadVersion(): String {
+    return try {
+        val resource = object {}.javaClass.classLoader.getResourceAsStream("version.txt")
+        if (resource != null) {
+            resource.bufferedReader().use { it.readText().trim() }
+        } else {
+            "0.1.0"
+        }
+    } catch (ex: Exception) {
+        "0.1.0"
+    }
+}
 
 class Kli : CliktCommand(name = "kli") {
     override fun help(context: Context): String {

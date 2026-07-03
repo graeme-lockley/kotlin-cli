@@ -55,16 +55,15 @@ class InitCommandTest {
     }
 
     @Test
-    fun init_overwrites_existing_project_json() {
+    fun init_fails_if_project_json_exists() {
         val projectDir = Files.createTempDirectory("kli-init-overwrite")
         projectDir.resolve("project.json").toFile().writeText("old content")
 
         val code = runCli(arrayOf("init")) { projectDir }
 
-        assertEquals(0, code)
+        assertEquals(1, code)
         val content = projectDir.resolve("project.json").readText()
-        assertTrue(content.contains("\"name\":"), "project.json should be overwritten with new content")
-        assertEquals(false, content.contains("old content"), "old content should be replaced")
+        assertEquals("old content", content, "old content should not be replaced")
     }
 
     @Test
