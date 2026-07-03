@@ -711,7 +711,7 @@ In offline mode, remote metadata lookups are skipped and only local cache metada
 
 - [x] `init` command (scaffolding)
 - [x] `refresh` command (SNAPSHOT re-resolution)
-- [ ] `dependency` command family (`list`, `status`, `add`, `remove`, `upgrade`)
+- [x] `dependency` command family (`list`, `status`, `add`, `remove`, `upgrade`)
 - [x] Better error messages with suggestions
 - [x] `--version` flag
 - [ ] Shell completion (optional)

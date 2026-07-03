@@ -13,6 +13,7 @@ import kli.commands.CleanAllCommand
 import kli.commands.CleanCommand
 import kli.commands.CommandEnvironment
 import kli.commands.BuildCommand
+import kli.commands.buildDependencyCommand
 import kli.commands.InitCommand
 import kli.commands.PackageCommand
 import kli.commands.ProjectLintCommand
@@ -52,6 +53,7 @@ fun buildCli(cwd: () -> Path = CommandEnvironment::cwd): Kli {
             BuildCommand(cwd),
             PackageCommand(cwd),
             PublishCommand(cwd),
+            buildDependencyCommand(cwd),
         )
 }
 
