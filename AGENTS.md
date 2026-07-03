@@ -15,6 +15,12 @@ Repository-level working agreement for implementing kli (Kotlin CLI tool) from t
 - Keep changes focused and atomic; avoid unrelated refactors.
 - Use ./gradlew for all build and test execution.
 
+## Documentation Standards
+- Be precise, actionable, and concise.
+- Keep terminology consistent (command names, paths, cache locations, file patterns).
+- Use examples that match documented behavior.
+- Update all affected sections when changing a feature decision.
+
 ## Testing Policy (Mandatory)
 - No feature is complete without automated unit test coverage.
 - Every feature change must include at least one new or updated unit test that proves behavior.
@@ -35,6 +41,15 @@ A change is complete only when all conditions below are true:
 - Are edge/error paths tested where behavior changed?
 - Do tests run with ./gradlew test and pass in CI/local?
 - Are spec/docs updates included when behavior changed?
+- Do command behaviors match schema and architecture sections in the spec?
+- Are path conventions and test discovery patterns consistent throughout docs?
+- Are future-scope items clearly marked and not mixed with v1 guarantees?
+- Are defaults consistent across examples, schema tables, and command docs?
+
+## Change Management
+- Prefer small, focused commits with Conventional Commit messages.
+- Include rationale in commit body when changing major decisions.
+- If a change is ambiguous, ask concise clarifying questions before editing.
 
 ## Notes
 - Keep Gradle wrapper files committed.
