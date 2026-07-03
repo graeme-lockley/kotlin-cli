@@ -12,9 +12,11 @@ import com.github.ajalt.clikt.parameters.options.versionOption
 import kli.commands.CleanAllCommand
 import kli.commands.CleanCommand
 import kli.commands.CommandEnvironment
+import kli.commands.BuildCommand
 import kli.commands.InitCommand
 import kli.commands.PackageCommand
 import kli.commands.ProjectLintCommand
+import kli.commands.PublishCommand
 import kli.commands.RefreshCommand
 import kli.commands.RunCommand
 import kli.commands.TestCommand
@@ -47,7 +49,9 @@ fun buildCli(cwd: () -> Path = CommandEnvironment::cwd): Kli {
             RefreshCommand(cwd),
             RunCommand(cwd),
             TestCommand(cwd),
+            BuildCommand(cwd),
             PackageCommand(cwd),
+            PublishCommand(cwd),
         )
 }
 

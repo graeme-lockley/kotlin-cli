@@ -718,9 +718,9 @@ In offline mode, remote metadata lookups are skipped and only local cache metada
 
 ### Phase 4 — Package & Publish
 
-- [ ] `build` command (fat JAR with dispatcher)
-- [ ] `publish` command (deploy to Maven registry)
-- [ ] Service file merging
+- [x] `build` command (fat JAR with dispatcher)
+- [x] `publish` command (deploy to Maven registry)
+- [x] Service file merging
 
 ---
 
