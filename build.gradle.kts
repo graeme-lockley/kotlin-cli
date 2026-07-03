@@ -18,8 +18,16 @@ dependencies {
     implementation("org.apache.maven:maven-resolver-provider:3.9.9")
     implementation("org.apache.maven.resolver:maven-resolver-connector-basic:1.9.22")
     implementation("org.apache.maven.resolver:maven-resolver-transport-http:1.9.22")
+    runtimeOnly("org.slf4j:slf4j-nop:1.7.36")
 
     implementation("com.google.code.gson:gson:2.13.1")
+    implementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.21")
+    implementation("org.junit.platform:junit-platform-launcher:1.13.4")
+    implementation("org.junit.platform:junit-platform-engine:1.13.4")
+    implementation("org.junit.platform:junit-platform-commons:1.13.4")
+    implementation("org.junit.jupiter:junit-jupiter-engine:5.13.4")
+    implementation("org.opentest4j:opentest4j:1.3.0")
+    implementation("org.apiguardian:apiguardian-api:1.1.2")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")

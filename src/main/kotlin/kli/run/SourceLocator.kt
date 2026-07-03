@@ -42,4 +42,25 @@ object SourceLocator {
 
         return null
     }
+
+    fun discoverTestSources(projectRoot: Path, config: ProjectConfig): List<Path> {
+        val sourceRoots = config.sources.ifEmpty { listOf(".") }
+        return sourceRoots
+            .asSequence()
+            .map { projectRoot.resolve(it).normalize() }
+            .filter { Files.exists(it) }
+            .flatMap { root ->
+                Files.walk(root).use { paths ->
+                    paths
+                        .filter { it.isRegularFile() }
+                        .filter { it.extension == "kt" }
+                        .filter { it.name.endsWith("Test.kt") }
+                        .toList()
+                        .asSequence()
+                }
+            }
+            .distinct()
+            .sortedBy { it.toString() }
+            .toList()
+    }
 }

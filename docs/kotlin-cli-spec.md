@@ -22,7 +22,7 @@ Kotlin is a great language burdened by terrible project tooling. Gradle and Mave
 
 ## 2. Commands
 
-### 2.1 `kli run <qualified-name>`
+### 2.1 `kli run [--show-compiler-logging] <qualified-name>`
 
 Compiles all stale source files in the project, then runs the specified main class.
 
@@ -30,6 +30,7 @@ Compiles all stale source files in the project, then runs the specified main cla
 kli run tools.Server
 kli run scripts.Migrate
 kli run services.MyApp
+kli run --show-compiler-logging tools.Server
 ```
 
 The `<qualified-name>` maps to a source file by convention:
@@ -59,6 +60,10 @@ Mapping rule: `<qualified-name>` is the relative file path from a configured sou
 kli run tools.Server -- --port 8080 --db-url jdbc:postgresql://localhost/mydb
 ```
 
+**Debugging compiler diagnostics:**
+- Add `--show-compiler-logging` to print Kotlin compiler diagnostic logging during compilation.
+- Default behaviour keeps compiler diagnostic logging quiet unless there is an error.
+
 **Shebang support:**
 Since Kotlin's lexer discards `#!` at the top of a file, source files with a shebang work directly:
 
@@ -71,7 +76,7 @@ fun main() {
 
 Make it executable (`chmod +x`) and run as `./tools/CLI.kt`.
 
-### 2.2 `kli test [path]`
+### 2.2 `kli test [--show-compiler-logging] [path]`
 
 Discovers and runs tests authored with `kotlin.test` annotations. Without arguments, discovers all `*Test.kt` files under configured source roots.
 
@@ -79,6 +84,7 @@ Discovers and runs tests authored with `kotlin.test` annotations. Without argume
 kli test                           # run all tests in the project
 kli test tools/SomeServiceTest.kt  # run tests in a single file
 kli test tools/                    # run tests in a directory
+kli test --show-compiler-logging   # include compiler diagnostic logging
 ```
 
 **Behaviour:**
@@ -165,12 +171,13 @@ kli refresh
 2. Re-resolve all Maven dependencies
 3. Recompile all source files (cache invalidated)
 
-### 2.8 `kli package [--output <path>]`
+### 2.8 `kli package [--output <path>] [--show-compiler-logging]`
 
 Builds a distributable fat JAR with all discovered mains and installs it into the local Maven repository cache (`~/.kli/m2/`).
 
 ```
 kli package --output ./dist/my-project.jar
+kli package --show-compiler-logging
 ```
 
 **Behaviour:**

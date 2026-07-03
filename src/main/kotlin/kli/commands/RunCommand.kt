@@ -5,6 +5,9 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import kli.compiler.EmbeddableKotlinCompiler
 import kli.run.RunExecutionOutcome
 import kli.run.RunExecutor
 import kli.run.RunWorkflow
@@ -13,7 +16,9 @@ import java.nio.file.Path
 
 class RunCommand(
     private val cwd: () -> Path,
-    private val runExecutor: RunExecutor = RunExecutor(),
+    private val runExecutorFactory: (Boolean) -> RunExecutor = { showCompilerLogging ->
+        RunExecutor(compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging))
+    },
 ) : CliktCommand(name = "run") {
     override fun help(context: Context): String {
         return "Compile stale sources and run a top-level main from a qualified source name"
@@ -27,9 +32,14 @@ class RunCommand(
         name = "args",
         help = "Arguments forwarded to the target program",
     ).multiple()
+    private val showCompilerLogging by option(
+        "--show-compiler-logging",
+        help = "Show Kotlin compiler diagnostic logging during compilation",
+    ).flag(default = false)
 
     override fun run() {
         val workflow = RunWorkflow(cwd)
+        val runExecutor = runExecutorFactory(showCompilerLogging)
         when (val result = workflow.prepare(mainClass, programArgs)) {
             is RunWorkflowOutcome.Failure -> {
                 result.errors.forEach { echo("error: $it", err = true) }

@@ -13,6 +13,7 @@ import java.nio.file.Path
 
 class EmbeddableKotlinCompiler(
     private val errorStream: PrintStream = System.err,
+    private val verboseLogging: Boolean = false,
 ) : KotlinCompiler {
     override fun compile(
         sourceFiles: List<Path>,
@@ -35,7 +36,7 @@ class EmbeddableKotlinCompiler(
             noReflect = true
         }
 
-        val collector = PrintingMessageCollector(errorStream, MessageRenderer.PLAIN_RELATIVE_PATHS, true)
+        val collector = PrintingMessageCollector(errorStream, MessageRenderer.PLAIN_RELATIVE_PATHS, verboseLogging)
         val exitCode = K2JVMCompiler().exec(collector, Services.EMPTY, args)
 
         return when (exitCode) {
