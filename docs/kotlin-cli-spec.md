@@ -162,8 +162,6 @@ kli refresh
 
 ### 2.8 `kli package [--output <path>]`
 
-*(Future / stretch goal)*
-
 Builds a distributable fat JAR with all discovered mains and installs it into the local Maven repository cache (`~/.kli/m2/`).
 
 ```
@@ -227,21 +225,24 @@ java -jar ./dist/app.jar tools.CLI
 ```
 my-project/
 ├── project.json              # required
-├── tools/                    # any name, any depth
+├── tools/                    # CLI entrypoints and scripts
 │   ├── Server.kt             # fun main()
+│   ├── ServerTest.kt         # tests for Server.kt (co-located)
 │   └── CLI.kt                # fun main()
-├── services/
-│   └── Worker.kt             # fun main()
-├── lib/
-│   └── Database.kt           # shared code, no main
-└── tests/
-  └── DatabaseTest.kt       # test file
+├── services/                 # application/service layer
+│   ├── Worker.kt             # fun main() or shared service code
+│   └── WorkerTest.kt         # tests for Worker.kt (co-located)
+└── lib/                      # reusable/supporting library code
+    ├── Database.kt           # shared code, no main
+    └── DatabaseTest.kt       # tests for Database.kt (co-located)
 ```
 
 **Rules:**
 - Any `.kt` file under the project root is a potential source file
 - A source file is considered a "main entrypoint" if it contains `fun main()`
 - A source file is considered a "test file" if its name ends `Test.kt`
+- Tests should be co-located with the files they test (no dedicated `tests/` directory required)
+- Top-level folders (for example `tools/`, `services/`, `lib/`) should reflect project intent and may vary by project type
 - All source files share the same classpath (resolved from `project.json`)
 - No `src/` convention — you organise how you want
 
@@ -464,6 +465,7 @@ Step 3: Delete ~/.kli/cache/<hash>/
 - [ ] `clean` command
 - [ ] `clean-all` command
 - [ ] `project-lint` command
+- [ ] `package` command (build + install to local `~/.kli/m2/`)
 
 ### Phase 2 — Tests & Resources
 
@@ -485,7 +487,6 @@ Step 3: Delete ~/.kli/cache/<hash>/
 ### Phase 4 — Package & Publish
 
 - [ ] `build` command (fat JAR with dispatcher)
-- [ ] `package` command (build + install to local `~/.kli/m2/`)
 - [ ] `publish` command (deploy to Maven registry)
 - [ ] Service file merging
 
