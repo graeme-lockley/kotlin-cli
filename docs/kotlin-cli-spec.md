@@ -489,12 +489,12 @@ Step 3: Delete ~/.kli/cache/<hash>/
 
 ### Phase 2 — Tests & Resources
 
-- [ ] `test` command
-- [ ] Test file discovery (`**/*Test.kt`)
-- [ ] Synthetic test runner generation
-- [ ] Test result reporting
-- [ ] Resource glob resolution and copying
-- [ ] `testDeps` support (separate test classpath)
+- [x] `test` command
+- [x] Test file discovery (`**/*Test.kt`)
+- [x] Synthetic test runner generation
+- [x] Test result reporting
+- [x] Resource glob resolution and copying
+- [x] `testDeps` support (separate test classpath)
 
 ### Phase 3 — Quality of life
 

@@ -97,4 +97,41 @@ class MainTest {
         val code = runCli(arrayOf("test")) { root }
         assertEquals(1, code)
     }
+
+    @Test
+    fun test_command_resolves_test_deps_without_adding_them_to_runtime_config() {
+        val root = Files.createTempDirectory("kli-main-test-project-testdeps")
+        root.resolve("project.json").writeText(
+            """
+            {
+              "testDeps": ["com.google.code.gson:gson:2.13.1"]
+            }
+            """.trimIndent(),
+        )
+        root.resolve("tools").toFile().mkdirs()
+        root.resolve("tools/App.kt").writeText(
+            """
+            class App {
+                fun name(): String = "demo"
+            }
+            """.trimIndent(),
+        )
+        root.resolve("tools/GsonBackedTest.kt").writeText(
+            """
+            import com.google.gson.JsonParser
+            import kotlin.test.Test
+
+            class GsonBackedTest {
+                @Test
+                fun parses_json_using_test_only_dependency() {
+                    val parsed = JsonParser.parseString("{\"ok\":true}").asJsonObject
+                    check(parsed.get("ok").asBoolean)
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val code = runCli(arrayOf("test")) { root }
+        assertEquals(0, code)
+    }
 }
