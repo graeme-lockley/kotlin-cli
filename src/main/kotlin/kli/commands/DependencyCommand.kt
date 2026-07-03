@@ -11,6 +11,8 @@ import com.github.ajalt.clikt.parameters.options.option
 import kli.cache.CacheCleaner
 import kli.project.DependencyManager
 import kli.project.ProjectRootFinder
+import kli.resolver.MavenCentralVersionResolver
+import kli.resolver.MavenCoordinate
 import java.nio.file.Path
 
 class DependencyCommand(private val cwd: () -> Path) : CliktCommand(name = "dependency") {
@@ -90,26 +92,82 @@ class DependencyStatusSubcommand(private val cwd: () -> Path) : CliktCommand(nam
                 return@onSuccess
             }
 
+            val registryUrl = registry ?: "https://repo.maven.apache.org/maven2"
             echo("Checking ${allDeps.size} dependencies against Maven Central...")
             if (offline) {
                 echo("(offline mode - versions from local cache only)")
             }
             echo("")
 
-            // Simple implementation: report all as up to date for now
+            val versionResolver = MavenCentralVersionResolver()
+            var hasUpdates = false
+            var hasFailed = false
+
+            // Check runtime dependencies
             if (deps.runtimeDeps.isNotEmpty()) {
                 echo("Runtime dependencies:")
-                deps.runtimeDeps.forEach { dep ->
-                    echo("  $dep  ✓ up to date")
+                deps.runtimeDeps.forEach { depString ->
+                    try {
+                        val coord = MavenCoordinate.parse(depString)
+                        val versionInfo = if (offline) {
+                            // In offline mode, we can't check, so mark as unknown
+                            null
+                        } else {
+                            versionResolver.resolveVersions(depString, registryUrl)
+                        }
+
+                        if (versionInfo?.error != null) {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ✗ ${versionInfo.error}")
+                            hasFailed = true
+                        } else if (versionInfo?.latest == null && offline) {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ? (offline)")
+                        } else if (versionInfo?.latest != null && versionInfo.latest != coord.version) {
+                            echo("  ${coord.group}:${coord.artifact}  ${coord.version}  -> ${versionInfo.latest}  (latest)")
+                            hasUpdates = true
+                        } else {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ✓ up to date")
+                        }
+                    } catch (ex: Exception) {
+                        echo("  $depString  ✗ Invalid coordinate")
+                        hasFailed = true
+                    }
                 }
             }
 
+            // Check test dependencies
             if (deps.testDeps.isNotEmpty()) {
                 if (deps.runtimeDeps.isNotEmpty()) echo("")
                 echo("Test dependencies:")
-                deps.testDeps.forEach { dep ->
-                    echo("  $dep  ✓ up to date")
+                deps.testDeps.forEach { depString ->
+                    try {
+                        val coord = MavenCoordinate.parse(depString)
+                        val versionInfo = if (offline) {
+                            null
+                        } else {
+                            versionResolver.resolveVersions(depString, registryUrl)
+                        }
+
+                        if (versionInfo?.error != null) {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ✗ ${versionInfo.error}")
+                            hasFailed = true
+                        } else if (versionInfo?.latest == null && offline) {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ? (offline)")
+                        } else if (versionInfo?.latest != null && versionInfo.latest != coord.version) {
+                            echo("  ${coord.group}:${coord.artifact}  ${coord.version}  -> ${versionInfo.latest}  (latest)")
+                            hasUpdates = true
+                        } else {
+                            echo("  ${coord.group}:${coord.artifact}:${coord.version}  ✓ up to date")
+                        }
+                    } catch (ex: Exception) {
+                        echo("  $depString  ✗ Invalid coordinate")
+                        hasFailed = true
+                    }
                 }
+            }
+
+            // Exit code 2 if updates available or resolution failed
+            if (hasUpdates || hasFailed) {
+                throw ProgramResult(2)
             }
         }.onFailure { ex ->
             echo("error: ${ex.message}", err = true)
