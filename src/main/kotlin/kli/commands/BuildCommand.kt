@@ -31,32 +31,47 @@ class BuildCommand(
         "--silent",
         help = "Hide compile and dependency progress output",
     ).flag(default = false)
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
 
     override fun run() {
-        val service = BuildService(
-            cwd = cwd,
-            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
-                if (!silent) {
-                    echo(formatDependencyProgress(coordinate, durationMs))
+        try {
+            val service = BuildService(
+                cwd = cwd,
+                dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
+                    if (!silent) {
+                        echo(formatDependencyProgress(coordinate, durationMs))
+                    }
+                },
+                compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+                onCompiledSource = { sourceFile, durationMs ->
+                    if (!silent) {
+                        val root = cwd().toAbsolutePath().normalize()
+                        echo(formatCompileProgress(root, sourceFile, durationMs))
+                    }
+                },
+            )
+            when (val result = service.build(outputPath)) {
+                is BuildOutcome.Success -> {
+                    echo("Built jar: ${result.outputJar}")
                 }
-            },
-            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
-            onCompiledSource = { sourceFile, durationMs ->
-                if (!silent) {
-                    val root = cwd().toAbsolutePath().normalize()
-                    echo(formatCompileProgress(root, sourceFile, durationMs))
-                }
-            },
-        )
-        when (val result = service.build(outputPath)) {
-            is BuildOutcome.Success -> {
-                echo("Built jar: ${result.outputJar}")
-            }
 
-            is BuildOutcome.Failure -> {
-                echo("error: ${result.message}", err = true)
-                throw ProgramResult(1)
+                is BuildOutcome.Failure -> {
+                    echo("error: ${result.message}", err = true)
+                    throw ProgramResult(1)
+                }
             }
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
+            throw ProgramResult(1)
         }
     }
 }

@@ -31,33 +31,48 @@ class PackageCommand(
         "--silent",
         help = "Hide compile and dependency progress output",
     ).flag(default = false)
+    private val verbose by option(
+        "--verbose",
+        "-v",
+        help = "Show full stack traces on errors",
+    ).flag(default = false)
 
     override fun run() {
-        val service = PackageService(
-            cwd = cwd,
-            dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
-                if (!silent) {
-                    echo(formatDependencyProgress(coordinate, durationMs))
+        try {
+            val service = PackageService(
+                cwd = cwd,
+                dependencyResolver = MavenDependencyResolver { coordinate, durationMs ->
+                    if (!silent) {
+                        echo(formatDependencyProgress(coordinate, durationMs))
+                    }
+                },
+                compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
+                onCompiledSource = { sourceFile, durationMs ->
+                    if (!silent) {
+                        val root = cwd().toAbsolutePath().normalize()
+                        echo(formatCompileProgress(root, sourceFile, durationMs))
+                    }
+                },
+            )
+            when (val result = service.build(outputPath)) {
+                is PackageOutcome.Success -> {
+                    echo("Built jar: ${result.outputJar}")
+                    echo("Installed jar: ${result.installedJar}")
                 }
-            },
-            compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging),
-            onCompiledSource = { sourceFile, durationMs ->
-                if (!silent) {
-                    val root = cwd().toAbsolutePath().normalize()
-                    echo(formatCompileProgress(root, sourceFile, durationMs))
-                }
-            },
-        )
-        when (val result = service.build(outputPath)) {
-            is PackageOutcome.Success -> {
-                echo("Built jar: ${result.outputJar}")
-                echo("Installed jar: ${result.installedJar}")
-            }
 
-            is PackageOutcome.Failure -> {
-                echo("error: ${result.message}", err = true)
-                throw ProgramResult(1)
+                is PackageOutcome.Failure -> {
+                    echo("error: ${result.message}", err = true)
+                    throw ProgramResult(1)
+                }
             }
+        } catch (ex: ProgramResult) {
+            throw ex
+        } catch (ex: Exception) {
+            echo("error: ${ex.message}", err = true)
+            if (verbose) {
+                ex.printStackTrace(System.err)
+            }
+            throw ProgramResult(1)
         }
     }
 }
