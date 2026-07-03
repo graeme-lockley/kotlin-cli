@@ -2,6 +2,7 @@ package kli.project
 
 data class PublishConfig(
     val registry: String? = null,
+    val repoId: String? = null,
 )
 
 data class ProjectConfig(
@@ -10,8 +11,10 @@ data class ProjectConfig(
     val target: String = "21",
     val deps: List<String> = emptyList(),
     val testDeps: List<String> = emptyList(),
-    val sources: List<String> = emptyList(),
+    val sources: List<String> = listOf("."),
     val resources: List<String> = emptyList(),
+    val jvmArgs: List<String> = emptyList(),
+    val repos: List<String> = listOf("https://repo.maven.apache.org/maven2"),
     val publish: PublishConfig? = null,
 )
 

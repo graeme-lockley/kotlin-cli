@@ -23,6 +23,8 @@ class ProjectConfigParserTest {
         assertEquals("0.1.0", result.config?.version)
         assertEquals("21", result.config?.target)
         assertEquals(1, result.config?.deps?.size)
+        assertEquals(listOf("."), result.config?.sources)
+        assertEquals(listOf("https://repo.maven.apache.org/maven2"), result.config?.repos)
     }
 
     @Test
@@ -59,4 +61,41 @@ class ProjectConfigParserTest {
         assertTrue(result.errors.any { it.contains("deps[0]") })
         assertTrue(result.errors.any { it.contains("publish") })
     }
+
+        @Test
+        fun parses_publish_repo_id_when_present() {
+                val dir = Files.createTempDirectory("kli-config-publish")
+                val file = dir.resolve("project.json")
+                Files.writeString(file, """
+                        {
+                            "publish": {
+                                "registry": "https://repo.maven.apache.org/maven2",
+                                "repoId": "central"
+                            }
+                        }
+                """.trimIndent())
+
+                val result = ProjectConfigParser.load(file, strictUnknownFields = true)
+
+                assertTrue(result.isValid)
+                assertEquals("central", result.config?.publish?.repoId)
+        }
+
+            @Test
+            fun parses_repos_and_jvm_args() {
+                val dir = Files.createTempDirectory("kli-config-runtime")
+                val file = dir.resolve("project.json")
+                Files.writeString(file, """
+                    {
+                      "repos": ["https://repo1.maven.org/maven2"],
+                      "jvmArgs": ["-Xmx512m"]
+                    }
+                """.trimIndent())
+
+                val result = ProjectConfigParser.load(file, strictUnknownFields = true)
+
+                assertTrue(result.isValid)
+                assertEquals(listOf("https://repo1.maven.org/maven2"), result.config?.repos)
+                assertEquals(listOf("-Xmx512m"), result.config?.jvmArgs)
+            }
 }

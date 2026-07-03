@@ -14,6 +14,8 @@ object ProjectConfigParser {
         "testDeps",
         "sources",
         "resources",
+        "jvmArgs",
+        "repos",
         "publish",
     )
 
@@ -62,8 +64,15 @@ object ProjectConfigParser {
 
         val deps = stringArrayField(json, "deps", errors)
         val testDeps = stringArrayField(json, "testDeps", errors)
-        val sources = stringArrayField(json, "sources", errors)
+        val sources = stringArrayField(json, "sources", errors, defaultValue = listOf("."))
         val resources = stringArrayField(json, "resources", errors)
+        val jvmArgs = stringArrayField(json, "jvmArgs", errors)
+        val repos = stringArrayField(
+            json,
+            "repos",
+            errors,
+            defaultValue = listOf("https://repo.maven.apache.org/maven2"),
+        )
 
         val publish = parsePublish(json, errors)
 
@@ -80,6 +89,8 @@ object ProjectConfigParser {
                 testDeps = testDeps,
                 sources = sources,
                 resources = resources,
+                jvmArgs = jvmArgs,
+                repos = repos,
                 publish = publish,
             ),
         )
@@ -97,6 +108,14 @@ object ProjectConfigParser {
         }
 
         val publishObject = element.asJsonObject
+        if (publishObject.has("repoId")) {
+            val repoId = publishObject.get("repoId")
+            if (!(repoId.isJsonPrimitive && repoId.asJsonPrimitive.isString)) {
+                errors += "Field publish.repoId must be a string"
+                return null
+            }
+        }
+
         if (publishObject.has("registry")) {
             val registry = publishObject.get("registry")
             if (!(registry.isJsonPrimitive && registry.asJsonPrimitive.isString)) {
@@ -105,7 +124,10 @@ object ProjectConfigParser {
             }
         }
 
-        return PublishConfig(registry = publishObject.get("registry")?.asString)
+        return PublishConfig(
+            registry = publishObject.get("registry")?.asString,
+            repoId = publishObject.get("repoId")?.asString,
+        )
     }
 
     private fun stringField(
@@ -134,9 +156,10 @@ object ProjectConfigParser {
         json: JsonObject,
         key: String,
         errors: MutableList<String>,
+        defaultValue: List<String> = emptyList(),
     ): List<String> {
         if (!json.has(key)) {
-            return emptyList()
+            return defaultValue
         }
 
         val element = json.get(key)

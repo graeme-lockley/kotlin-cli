@@ -3,6 +3,8 @@ package kli
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
+import kli.commands.CleanAllCommand
+import kli.commands.CleanCommand
 import kli.commands.CommandEnvironment
 import kli.commands.ProjectLintCommand
 
@@ -14,6 +16,10 @@ class Kli : CliktCommand(name = "kli") {
 
 fun main(args: Array<String>) {
     Kli()
-        .subcommands(ProjectLintCommand(CommandEnvironment::cwd))
+        .subcommands(
+            ProjectLintCommand(CommandEnvironment::cwd),
+            CleanCommand(CommandEnvironment::cwd),
+            CleanAllCommand(),
+        )
     .main(args)
 }
