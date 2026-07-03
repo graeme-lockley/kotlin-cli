@@ -32,10 +32,12 @@ class PackageServiceTest {
     @Test
     fun builds_output_jar_and_installs_to_local_m2() {
         val root = Files.createTempDirectory("kli-package-ok")
-        Files.writeString(root.resolve("project.json"), "{\"name\":\"demo\",\"version\":\"1.2.3\",\"deps\":[]}")
+        Files.writeString(root.resolve("project.json"), "{\"name\":\"demo\",\"version\":\"1.2.3\",\"deps\":[],\"resources\":[\"config/**\"]}")
         val toolsDir = Files.createDirectories(root.resolve("tools"))
         val sourceFile = toolsDir.resolve("Server.kt")
         Files.writeString(sourceFile, "fun main() {}")
+        val configDir = Files.createDirectories(root.resolve("config"))
+        Files.writeString(configDir.resolve("app.conf"), "mode=test")
 
         val outputJar = root.resolve("dist/custom.jar")
         val fakeJarBuilder = FakeJarBuilder()
@@ -56,8 +58,43 @@ class PackageServiceTest {
         result as PackageOutcome.Success
         assertEquals(outputJar.toAbsolutePath().normalize(), result.outputJar.toAbsolutePath().normalize())
         assertEquals(outputJar.toAbsolutePath().normalize(), fakeJarBuilder.lastOutputJar?.toAbsolutePath()?.normalize())
+        assertEquals("kli.dispatcher.MainDispatcherKt", fakeJarBuilder.lastMainClass)
+        assertTrue(fakeJarBuilder.lastRuntimeDependencies?.isEmpty() == true)
+        assertTrue(fakeJarBuilder.lastAdditionalEntries?.containsKey("config/app.conf") == true)
         assertEquals("demo", fakeInstaller.lastArtifact)
         assertEquals("1.2.3", fakeInstaller.lastVersion)
+    }
+
+    @Test
+    fun forwards_runtime_dependencies_to_jar_builder() {
+        val root = Files.createTempDirectory("kli-package-deps")
+        Files.writeString(root.resolve("project.json"), "{\"name\":\"demo\",\"version\":\"1.2.3\",\"deps\":[]}")
+        val toolsDir = Files.createDirectories(root.resolve("tools"))
+        val sourceFile = toolsDir.resolve("Server.kt")
+        Files.writeString(sourceFile, "fun main() {}")
+
+        val depJar = Files.createTempFile("dep", ".jar")
+        Files.writeString(depJar, "placeholder")
+
+        val fakeJarBuilder = FakeJarBuilder()
+
+        val service = PackageService(
+            cwd = { root },
+            dependencyResolver = object : DependencyResolver {
+                override fun resolve(config: ProjectConfig): DependencyResolutionResult {
+                    return DependencyResolutionResult(runtimeClasspath = listOf(depJar), testClasspath = emptyList())
+                }
+            },
+            compiler = FakeCompiler(CompilationResult(true)),
+            jarBuilder = fakeJarBuilder,
+            installer = FakeInstaller(),
+            userHome = Files.createTempDirectory("kli-home").toString(),
+        )
+
+        val result = service.build(outputOverride = root.resolve("dist/out.jar"))
+
+        assertTrue(result is PackageOutcome.Success)
+        assertEquals(listOf(depJar), fakeJarBuilder.lastRuntimeDependencies)
     }
 
     private class FakeResolver : DependencyResolver {
@@ -84,9 +121,21 @@ class PackageServiceTest {
 
     private class FakeJarBuilder : JarBuilder {
         var lastOutputJar: Path? = null
+        var lastMainClass: String? = null
+        var lastRuntimeDependencies: List<Path>? = null
+        var lastAdditionalEntries: Map<String, Path>? = null
 
-        override fun build(classesDir: Path, outputJar: Path) {
+        override fun build(
+            classesDir: Path,
+            runtimeDependencies: List<Path>,
+            additionalEntries: Map<String, Path>,
+            outputJar: Path,
+            mainClass: String,
+        ) {
             lastOutputJar = outputJar
+            lastMainClass = mainClass
+            lastRuntimeDependencies = runtimeDependencies
+            lastAdditionalEntries = additionalEntries
             Files.createDirectories(outputJar.parent)
             Files.writeString(outputJar, "jar")
         }
