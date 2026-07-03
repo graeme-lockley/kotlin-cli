@@ -714,7 +714,7 @@ In offline mode, remote metadata lookups are skipped and only local cache metada
 - [x] `dependency` command family (`list`, `status`, `add`, `remove`, `upgrade`)
 - [x] Better error messages with suggestions
 - [x] `--version` flag
-- [ ] Shell completion (optional)
+- [x] Shell completion (optional)
 
 ### Phase 4 — Package & Publish
 
