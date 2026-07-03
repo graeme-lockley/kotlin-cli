@@ -111,7 +111,12 @@ class DependencyManager(private val projectJsonPath: Path) {
         
         if (coordinate == null) {
             // Upgrade all - for now, just return success (full implementation would resolve new versions)
-            return DependencyOutcome.Success("All dependencies are up to date")
+            return DependencyOutcome.Success("No coordinate specified; all dependencies are up to date")
+        }
+        
+        if (targetVersion == null) {
+            // Coordinate but no version - no-op
+            return DependencyOutcome.Success("No target version specified; no upgrades performed")
         }
         
         val coordinateParts = coordinate.split(":")

@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import kli.cache.CacheCleaner
@@ -200,8 +201,8 @@ class DependencyRemoveSubcommand(private val cwd: () -> Path) : CliktCommand(nam
 }
 
 class DependencyUpgradeSubcommand(private val cwd: () -> Path) : CliktCommand(name = "upgrade") {
-    private val coordinate by argument("COORDINATE", help = "Maven coordinate (optional)")
-    private val version by argument("VERSION", help = "Target version (optional)")
+    private val coordinate by argument("COORDINATE", help = "Maven coordinate (optional)").optional()
+    private val version by argument("VERSION", help = "Target version (optional)").optional()
     private val scope by option("--scope", help = "Dependency scope: runtime or test")
     private val yes by option("--yes", "-y", help = "Skip confirmation").flag(default = false)
     private val dryRun by option("--dry-run", help = "Show planned changes only").flag(default = false)
