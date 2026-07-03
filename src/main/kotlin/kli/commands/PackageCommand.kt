@@ -1,6 +1,7 @@
 package kli.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.path
@@ -11,7 +12,14 @@ import java.nio.file.Path
 class PackageCommand(
     private val cwd: () -> Path,
 ) : CliktCommand(name = "package") {
-    private val outputPath by option("--output").path(canBeDir = false, mustExist = false)
+    override fun help(context: Context): String {
+        return "Build a fat jar and install it to the local ~/.kli/m2 repository"
+    }
+
+    private val outputPath by option(
+        "--output",
+        help = "Output jar path (default: ./dist/<name>-<version>.jar)",
+    ).path(canBeDir = false, mustExist = false)
 
     override fun run() {
         val service = PackageService(cwd)

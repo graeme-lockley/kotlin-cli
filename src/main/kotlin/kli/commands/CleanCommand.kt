@@ -1,6 +1,7 @@
 package kli.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import kli.cache.CacheCleaner
 import kli.project.ProjectRootFinder
@@ -9,6 +10,10 @@ import java.nio.file.Path
 class CleanCommand(
     private val cwd: () -> Path,
 ) : CliktCommand(name = "clean") {
+    override fun help(context: Context): String {
+        return "Remove cache artifacts for the current project only"
+    }
+
     override fun run() {
         val projectRoot = ProjectRootFinder.find(cwd())
             ?: fail("No project.json found in current directory or parents")

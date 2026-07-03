@@ -1,6 +1,7 @@
 package kli.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import kli.project.ProjectConfigParser
 import kli.project.ProjectRootFinder
@@ -10,6 +11,10 @@ import kotlin.io.path.name
 class ProjectLintCommand(
     private val cwd: () -> Path,
 ) : CliktCommand(name = "project-lint") {
+    override fun help(context: Context): String {
+        return "Validate project.json strictly and report schema/type errors"
+    }
+
     override fun run() {
         val projectRoot = ProjectRootFinder.find(cwd())
             ?: fail("No project.json found in current directory or parents")

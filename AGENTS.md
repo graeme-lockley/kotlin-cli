@@ -9,6 +9,7 @@ Repository-level working agreement for implementing kli (Kotlin CLI tool) from t
 - Runtime/toolchain target is JDK 21.
 - Gradle wrapper is the source of truth for local/CI builds.
 - Source of truth for product behavior remains docs/kotlin-cli-spec.md.
+- Phase 1 (Core) is complete; current implementation work should proceed from Phase 2 unless a Phase 1 defect is found.
 
 ## Development Workflow
 - Implement in small vertical slices that map to the implementation phases in the spec.

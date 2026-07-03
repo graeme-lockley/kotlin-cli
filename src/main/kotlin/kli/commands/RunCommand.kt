@@ -1,6 +1,7 @@
 package kli.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
@@ -14,8 +15,18 @@ class RunCommand(
     private val cwd: () -> Path,
     private val runExecutor: RunExecutor = RunExecutor(),
 ) : CliktCommand(name = "run") {
-    private val mainClass by argument(name = "qualified-name")
-    private val programArgs by argument(name = "args").multiple()
+    override fun help(context: Context): String {
+        return "Compile stale sources and run a top-level main from a qualified source name"
+    }
+
+    private val mainClass by argument(
+        name = "qualified-name",
+        help = "Qualified source name, for example tools.Server",
+    )
+    private val programArgs by argument(
+        name = "args",
+        help = "Arguments forwarded to the target program",
+    ).multiple()
 
     override fun run() {
         val workflow = RunWorkflow(cwd)

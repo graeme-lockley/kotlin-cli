@@ -48,6 +48,11 @@ Mapping rule: `<qualified-name>` is the relative file path from a configured sou
 3. Recompile only stale source files (hash-tracked)
 4. Run `fun main()` from the specified class
 
+**Entrypoint expectation (v1):**
+- The qualified name maps to a Kotlin source file and currently targets top-level `fun main(...)` entrypoints.
+- Runtime invocation resolves to generated Kotlin file classes using the `Kt` suffix (for example, `tools.Server` -> `tools.ServerKt`).
+- Object/class member mains are out of scope for v1 and should use top-level `main`.
+
 **Arguments after `--` are forwarded to the program:**
 
 ```
@@ -172,10 +177,13 @@ kli package --output ./dist/my-project.jar
 1. Resolve all dependencies
 2. Compile all source files
 3. Assemble a fat JAR (no shading/relocation in v1)
-4. Use a dispatcher `Main-Class` that accepts `<qualified-name>` as the first runtime argument
+4. Use a dispatcher `Main-Class` (`kli.dispatcher.MainDispatcherKt`) that accepts `<qualified-name>` as the first runtime argument
 5. Include all resources matched by patterns in `project.json` → `resources`
 6. Output to `--output` path (default: `./dist/<name>-<version>.jar` using name and version from `project.json`)
-7. Install the artifact and metadata into `~/.kli/m2/`
+7. Install the artifact and metadata into `~/.kli/m2/` using a local default group (`io.kli.local`) and write:
+  - `<artifact>-<version>.jar`
+  - `<artifact>-<version>.pom`
+  - `maven-metadata-local.xml`
 
 ### 2.9 `kli publish [--registry <url>]`
 
@@ -305,6 +313,11 @@ Minimal, validated schema. Example:
 ├── m2/                              # Maven dependency cache (shared across projects)
 │   ├── org.apache...
 │   ├── io.ktor...
+│   ├── io/kli/local/                # locally packaged artifacts (kli package)
+│   │   └── <artifact>/<version>/
+│   │       ├── <artifact>-<version>.jar
+│   │       ├── <artifact>-<version>.pom
+│   │       └── maven-metadata-local.xml
 │   └── ...
 ├── cache/
 │   ├── <project-root-hash>/         # Per-project cache
@@ -455,17 +468,17 @@ Step 3: Delete ~/.kli/cache/<hash>/
 
 ### Phase 1 — Core (weekend project)
 
-- [ ] CLI argument parsing (using `clikt`)
-- [ ] `project.json` reading + validation
-- [ ] Project root walking (find `project.json` in parent dirs)
-- [ ] Maven dependency resolution (cached to `~/.kli/m2/`)
-- [ ] Kotlin compilation (embeddable compiler)
-- [ ] `run` command
-- [ ] Source file hashing + incremental recompile
-- [ ] `clean` command
-- [ ] `clean-all` command
-- [ ] `project-lint` command
-- [ ] `package` command (build + install to local `~/.kli/m2/`)
+- [x] CLI argument parsing (using `clikt`)
+- [x] `project.json` reading + validation
+- [x] Project root walking (find `project.json` in parent dirs)
+- [x] Maven dependency resolution (cached to `~/.kli/m2/`)
+- [x] Kotlin compilation (embeddable compiler)
+- [x] `run` command
+- [x] Source file hashing + incremental recompile
+- [x] `clean` command
+- [x] `clean-all` command
+- [x] `project-lint` command
+- [x] `package` command (build + install to local `~/.kli/m2/`)
 
 ### Phase 2 — Tests & Resources
 
