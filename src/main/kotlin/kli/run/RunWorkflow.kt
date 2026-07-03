@@ -24,6 +24,8 @@ data class RunPlan(
     val projectRoot: Path,
     val config: ProjectConfig,
     val mainClass: String,
+    val mainSourceFile: Path,
+    val sourceFiles: List<Path>,
     val programArgs: List<String>,
     val cacheLayout: ProjectCacheLayout,
     val dependencies: DependencyResolutionResult,
@@ -45,6 +47,13 @@ class RunWorkflow(
         }
 
         val config = parsed.config ?: return RunWorkflowOutcome.Failure(listOf("project.json could not be parsed"))
+        val mainSource = SourceLocator.resolveMainSource(projectRoot, config, mainClass)
+            ?: return RunWorkflowOutcome.Failure(listOf("Could not find source file for $mainClass"))
+        val sourceFiles = SourceLocator.discoverRunSources(projectRoot, config)
+        if (sourceFiles.isEmpty()) {
+            return RunWorkflowOutcome.Failure(listOf("No Kotlin source files found for compilation"))
+        }
+
         val dependencies = try {
             dependencyResolver.resolve(config)
         } catch (ex: Exception) {
@@ -59,6 +68,8 @@ class RunWorkflow(
                 projectRoot = projectRoot,
                 config = config,
                 mainClass = mainClass,
+                mainSourceFile = mainSource,
+                sourceFiles = sourceFiles,
                 programArgs = programArgs,
                 cacheLayout = cacheLayout,
                 dependencies = dependencies,

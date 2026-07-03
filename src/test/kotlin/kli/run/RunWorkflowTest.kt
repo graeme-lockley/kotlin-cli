@@ -44,6 +44,23 @@ class RunWorkflowTest {
     }
 
     @Test
+    fun prepare_fails_when_main_source_cannot_be_resolved() {
+        val root = Files.createTempDirectory("kli-run-main-missing")
+        Files.writeString(root.resolve("project.json"), "{\"deps\":[]}")
+        val home = Files.createTempDirectory("kli-home").toString()
+        val workflow = RunWorkflow(
+            cwd = { root },
+            dependencyResolver = FakeResolver(),
+            userHome = home,
+        )
+
+        val result = workflow.prepare("tools.Server", emptyList())
+
+        assertTrue(result is RunWorkflowOutcome.Failure)
+        assertTrue((result as RunWorkflowOutcome.Failure).errors.first().contains("Could not find source file"))
+    }
+
+    @Test
     fun prepare_succeeds_and_creates_cache_layout() {
         val root = Files.createTempDirectory("kli-run-ok")
         Files.writeString(
@@ -54,6 +71,8 @@ class RunWorkflowTest {
             }
             """.trimIndent(),
         )
+                val toolsDir = Files.createDirectories(root.resolve("tools"))
+                Files.writeString(toolsDir.resolve("Server.kt"), "fun main(args: Array<String>) = println(args.size)")
 
         val fakeDependency = Files.createTempFile("dep", ".jar")
         val home = Files.createTempDirectory("kli-home").toString()
@@ -73,6 +92,7 @@ class RunWorkflowTest {
         assertEquals("tools.Server", plan.mainClass)
         assertEquals(listOf("--port", "8080"), plan.programArgs)
         assertEquals(1, plan.dependencies.runtimeClasspath.size)
+        assertTrue(plan.sourceFiles.isNotEmpty())
         assertTrue(Files.isDirectory(plan.cacheLayout.classesDir))
         assertTrue(Files.isDirectory(plan.cacheLayout.resourcesDir))
         assertTrue(Files.isDirectory(plan.cacheLayout.generatedDir))
@@ -82,6 +102,8 @@ class RunWorkflowTest {
     fun prepare_fails_when_dependency_resolution_throws() {
         val root = Files.createTempDirectory("kli-run-resolve-fail")
         Files.writeString(root.resolve("project.json"), "{\"deps\":[]}")
+        val toolsDir = Files.createDirectories(root.resolve("tools"))
+        Files.writeString(toolsDir.resolve("Server.kt"), "fun main() {}")
         val home = Files.createTempDirectory("kli-home").toString()
 
         val workflow = RunWorkflow(
