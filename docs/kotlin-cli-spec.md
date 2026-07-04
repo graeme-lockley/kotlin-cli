@@ -22,7 +22,7 @@ Kotlin is a great language burdened by terrible project tooling. Gradle and Mave
 
 ## 2. Commands
 
-### 2.1 `kli run [--show-compiler-logging] [--silent] <qualified-name>`
+### 2.1 `kli run [--show-compiler-logging] [--silent] [--verbose] <qualified-name>`
 
 Compiles all stale source files in the project, then runs the specified main class.
 
@@ -32,6 +32,7 @@ kli run scripts.Migrate
 kli run services.MyApp
 kli run --show-compiler-logging tools.Server
 kli run --silent tools.Server
+kli run --verbose tools.Server
 ```
 
 The `<qualified-name>` maps to a source file by convention:
@@ -75,6 +76,10 @@ Downloading com.google.code.gson:gson:2.13.1 (18ms)
 ```
 
 - Use `--silent` to hide these progress lines.
+
+**Verbose runtime diagnostics:**
+- Use `--verbose` to print execution diagnostics before launch, including project root, resolved main class, source count, runtime dependency count, compile classpath, and runtime classpath.
+- `--verbose` also prints full stack traces for command-level errors.
 
 **Shebang support:**
 Since Kotlin's lexer discards `#!` at the top of a file, source files with a shebang work directly:
@@ -245,6 +250,8 @@ Manages runtime and test dependencies declared in `project.json`.
 
 ```
 kli dependency list
+kli dependency list --tree
+kli dependency list --tree --format json
 kli dependency status
 kli dependency add <coordinate>
 kli dependency remove <coordinate>
@@ -270,6 +277,46 @@ Test dependencies:
 Rules:
 - If only one scope contains dependencies, print only that scope heading
 - If no dependencies exist, print `(no dependencies)`
+
+Options:
+- `--scope runtime|test|all` (default `all`): restrict output to one scope
+- `--tree`: resolve and print full transitive dependency tree
+- `--format text|json` (default `text`): output human-readable text or structured JSON
+
+Tree output example:
+
+```
+$ kli dependency list --tree --scope runtime
+Runtime dependency tree:
+- io.ktor:ktor-server-netty:3.1.2
++-- io.ktor:ktor-server-core:3.1.2
++-- org.slf4j:slf4j-api:2.0.17
+```
+
+Notes:
+- Tree glyphs are light gray in text mode.
+- Coordinate separators (`:`) are light gray in text mode.
+- Top-level coordinates are prefixed with `- `.
+
+JSON tree output example:
+
+```json
+{
+  "scope": "runtime",
+  "runtime": [
+    {
+      "coordinate": "io.ktor:ktor-server-netty:3.1.2",
+      "children": [
+        {
+          "coordinate": "io.ktor:ktor-server-core:3.1.2",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "test": []
+}
+```
 
 #### 2.9.2 `kli dependency status`
 

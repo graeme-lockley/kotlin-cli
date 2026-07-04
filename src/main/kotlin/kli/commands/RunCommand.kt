@@ -17,10 +17,11 @@ import java.nio.file.Path
 
 class RunCommand(
     private val cwd: () -> Path,
-    private val runExecutorFactory: (Boolean, Boolean, (Path, Long) -> Unit) -> RunExecutor = { showCompilerLogging, silent, onCompiledSource ->
+    private val runExecutorFactory: (Boolean, Boolean, (Path, Long) -> Unit, (kli.run.RunPlan, List<Path>, List<Path>, String) -> Unit) -> RunExecutor = { showCompilerLogging, silent, onCompiledSource, onRuntimeDiagnostics ->
         RunExecutor(
             compiler = EmbeddableKotlinCompiler(verboseLogging = showCompilerLogging, silent = silent),
             onCompiledSource = onCompiledSource,
+            onRuntimeDiagnostics = onRuntimeDiagnostics,
         )
     },
 ) : CliktCommand(name = "run") {
@@ -47,7 +48,7 @@ class RunCommand(
     private val verbose by option(
         "--verbose",
         "-v",
-        help = "Show full stack traces on errors",
+        help = "Print run diagnostics (classpath, main class, sources) and full stack traces on errors",
     ).flag(default = false)
 
     override fun run() {
@@ -67,11 +68,20 @@ class RunCommand(
                 }
 
                 is RunWorkflowOutcome.Success -> {
-                    val runExecutor = runExecutorFactory(showCompilerLogging, silent) { sourceFile, durationMs ->
-                        if (!silent) {
-                            echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
-                        }
-                    }
+                    val runExecutor = runExecutorFactory(
+                        showCompilerLogging,
+                        silent,
+                        { sourceFile, durationMs ->
+                            if (!silent) {
+                                echo(formatCompileProgress(result.plan.projectRoot, sourceFile, durationMs))
+                            }
+                        },
+                        { plan, compileClasspath, runtimeClasspath, jvmMainClass ->
+                            if (verbose) {
+                                printVerboseRunDiagnostics(plan, compileClasspath, runtimeClasspath, jvmMainClass)
+                            }
+                        },
+                    )
                     when (val execution = runExecutor.execute(result.plan)) {
                         is RunExecutionOutcome.Success -> {
                             if (execution.exitCode != 0) {
@@ -95,5 +105,23 @@ class RunCommand(
             }
             throw ProgramResult(1)
         }
+    }
+
+    private fun printVerboseRunDiagnostics(
+        plan: kli.run.RunPlan,
+        compileClasspath: List<Path>,
+        runtimeClasspath: List<Path>,
+        jvmMainClass: String,
+    ) {
+        echo("Run diagnostics:")
+        echo("  Project root: ${plan.projectRoot}")
+        echo("  Main class: $jvmMainClass")
+        echo("  Program args (${plan.programArgs.size}): ${plan.programArgs.joinToString(" ")}")
+        echo("  Source files: ${plan.sourceFiles.size}")
+        echo("  Runtime dependencies: ${plan.dependencies.runtimeClasspath.size}")
+        echo("  Compile classpath entries: ${compileClasspath.size}")
+        compileClasspath.forEach { echo("    [compile] $it") }
+        echo("  Runtime classpath entries: ${runtimeClasspath.size}")
+        runtimeClasspath.forEach { echo("    [runtime] $it") }
     }
 }

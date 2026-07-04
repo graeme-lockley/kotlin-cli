@@ -48,7 +48,7 @@ Common options:
 
 - `--show-compiler-logging` for compiler diagnostics (`run`, `test`, `build`, `package`)
 - `--silent` to hide dependency and compile progress lines
-- `--verbose` on command errors to print stack traces
+- `--verbose` on `run` to print classpath/main diagnostics and full stack traces on errors
 
 ## Minimal `project.json`
 
@@ -99,12 +99,18 @@ Conventions:
 
 ```bash
 kli dependency list
+kli dependency list --tree
+kli dependency list --tree --scope runtime
+kli dependency list --tree --format json
+kli dependency list --format json
 kli dependency status
 kli dependency add io.ktor:ktor-server-netty:3.1.2
 kli dependency add --scope test io.mockk:mockk:1.13.12
 kli dependency remove io.ktor:ktor-server-netty
 kli dependency upgrade
 ```
+
+`kli dependency list` supports `--scope runtime|test|all`, `--tree` for transitive trees, and `--format json` for machine-readable output.
 
 Dependency mutations (`add`, `remove`, `upgrade`) clean the project cache by default. Use `--no-clean` to skip.
 

@@ -23,6 +23,7 @@ class RunExecutor(
     private val programRunner: ProgramRunner = ReflectiveProgramRunner(),
     private val manifestStore: ManifestStore = ManifestStore(),
     private val onCompiledSource: (Path, Long) -> Unit = { _, _ -> },
+    private val onRuntimeDiagnostics: (RunPlan, List<Path>, List<Path>, String) -> Unit = { _, _, _, _ -> },
 ) {
     fun execute(plan: RunPlan): RunExecutionOutcome {
         val normalizedSources = plan.sourceFiles
@@ -89,6 +90,7 @@ class RunExecutor(
 
         val runtimeClasspath = buildRuntimeClasspath(plan)
         val jvmMainClass = "${plan.mainClass}Kt"
+        onRuntimeDiagnostics(plan, compileClasspath, runtimeClasspath, jvmMainClass)
 
         return try {
             val exitCode = programRunner.run(jvmMainClass, runtimeClasspath, plan.programArgs)

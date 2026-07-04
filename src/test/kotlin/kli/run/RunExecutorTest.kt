@@ -181,6 +181,46 @@ class RunExecutorTest {
         assertEquals(listOf(sourceB.toAbsolutePath().normalize()), compiler.lastSourceFiles)
     }
 
+    @Test
+    fun emits_runtime_diagnostics_before_execution() {
+        val projectRoot = Files.createTempDirectory("kli-run-exec-diagnostics")
+        val source = projectRoot.resolve("tools/Server.kt")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "fun main() {}")
+
+        val dependencyJar = Files.createTempFile("dep", ".jar")
+        val plan = createPlan(projectRoot, listOf(source), mainClass = "tools.Server").copy(
+            dependencies = DependencyResolutionResult(
+                runtimeClasspath = listOf(dependencyJar),
+                testClasspath = emptyList(),
+            ),
+        )
+
+        var diagnosticsCalled = false
+        var runtimeEntryCount = 0
+        var compileContainsDependency = false
+        var reportedMainClass = ""
+        val executor = RunExecutor(
+            compiler = FakeCompiler(CompilationResult(success = true)),
+            programRunner = FakeRunner(0),
+            manifestStore = ManifestStore(),
+            onRuntimeDiagnostics = { _, compileClasspath, runtimeClasspath, mainClass ->
+                diagnosticsCalled = true
+                runtimeEntryCount = runtimeClasspath.size
+                compileContainsDependency = compileClasspath.contains(dependencyJar)
+                reportedMainClass = mainClass
+            },
+        )
+
+        val result = executor.execute(plan)
+
+        assertTrue(result is RunExecutionOutcome.Success)
+        assertTrue(diagnosticsCalled)
+        assertTrue(compileContainsDependency)
+        assertTrue(runtimeEntryCount >= 4)
+        assertEquals("tools.ServerKt", reportedMainClass)
+    }
+
     private fun createPlan(
         projectRoot: Path,
         sourceFiles: List<Path>,

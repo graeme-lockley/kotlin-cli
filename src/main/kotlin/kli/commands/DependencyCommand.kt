@@ -1,5 +1,6 @@
 package kli.commands
 
+import com.google.gson.GsonBuilder
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
@@ -10,9 +11,12 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import kli.cache.CacheCleaner
 import kli.project.DependencyManager
+import kli.project.ProjectConfigParser
 import kli.project.ProjectRootFinder
+import kli.resolver.DependencyTreeNode
 import kli.resolver.MavenCentralVersionResolver
 import kli.resolver.MavenCoordinate
+import kli.resolver.MavenDependencyResolver
 import java.nio.file.Path
 
 class DependencyCommand(private val cwd: () -> Path) : CliktCommand(name = "dependency") {
@@ -26,37 +30,127 @@ class DependencyCommand(private val cwd: () -> Path) : CliktCommand(name = "depe
 }
 
 class DependencyListSubcommand(private val cwd: () -> Path) : CliktCommand(name = "list") {
+    private val tree by option("--tree", help = "Show dependency tree including transitives").flag(default = false)
+    private val scope by option("--scope", help = "Scope: runtime, test, or all")
+    private val format by option("--format", help = "Output format: text or json")
+
     override fun help(context: Context): String {
         return "List all dependencies"
     }
 
     override fun run() {
+        val selectedScope = scope ?: "all"
+        if (selectedScope !in setOf("runtime", "test", "all")) {
+            echo("error: Invalid --scope value '$selectedScope'. Use runtime, test, or all.", err = true)
+            throw ProgramResult(2)
+        }
+
+        val selectedFormat = format ?: "text"
+        if (selectedFormat !in setOf("text", "json")) {
+            echo("error: Invalid --format value '$selectedFormat'. Use text or json.", err = true)
+            throw ProgramResult(2)
+        }
+
         val projectRoot = ProjectRootFinder.find(cwd())
             ?: run {
                 echo("error: No project.json found", err = true)
                 throw ProgramResult(1)
             }
 
+        if (tree) {
+            val configResult = ProjectConfigParser.load(projectRoot.resolve("project.json"), strictUnknownFields = false)
+            if (!configResult.isValid || configResult.config == null) {
+                echo("error: ${configResult.errors.joinToString("; ")}", err = true)
+                throw ProgramResult(1)
+            }
+
+            val trees = try {
+                MavenDependencyResolver().resolveTrees(configResult.config)
+            } catch (ex: Exception) {
+                echo("error: Dependency tree resolution failed: ${ex.message}", err = true)
+                throw ProgramResult(1)
+            }
+
+            val showRuntime = selectedScope == "runtime" || selectedScope == "all"
+            val showTest = selectedScope == "test" || selectedScope == "all"
+
+            if (selectedFormat == "json") {
+                val runtimeTrees = if (showRuntime) trees.runtime else emptyList()
+                val testTrees = if (showTest) trees.test else emptyList()
+                echo(buildTreeJson(selectedScope, runtimeTrees, testTrees))
+                return
+            }
+
+            var printed = false
+            if (showRuntime) {
+                if (trees.runtime.isNotEmpty()) {
+                    echo("Runtime dependency tree:")
+                    renderForest(trees.runtime).forEach { echo(it) }
+                    printed = true
+                } else if (selectedScope == "runtime") {
+                    echo("(no runtime dependencies)")
+                    return
+                }
+            }
+
+            if (showTest) {
+                if (trees.test.isNotEmpty()) {
+                    if (printed) echo("")
+                    echo("Test dependency tree:")
+                    renderForest(trees.test).forEach { echo(it) }
+                    printed = true
+                } else if (selectedScope == "test") {
+                    echo("(no test dependencies)")
+                    return
+                }
+            }
+
+            if (!printed) {
+                echo("(no dependencies)")
+            }
+            return
+        }
+
         val manager = DependencyManager(projectRoot.resolve("project.json"))
         val result = manager.list()
 
         result.onSuccess { deps ->
+            val showRuntime = selectedScope == "runtime" || selectedScope == "all"
+            val showTest = selectedScope == "test" || selectedScope == "all"
+
+            val runtimeDeps = if (showRuntime) deps.runtimeDeps else emptyList()
+            val testDeps = if (showTest) deps.testDeps else emptyList()
+
+            if (selectedFormat == "json") {
+                echo(buildListJson(selectedScope, runtimeDeps, testDeps))
+                return@onSuccess
+            }
+
             if (deps.runtimeDeps.isEmpty() && deps.testDeps.isEmpty()) {
                 echo("(no dependencies)")
                 return@onSuccess
             }
 
             var printed = false
-            if (deps.runtimeDeps.isNotEmpty()) {
+            if (showRuntime && deps.runtimeDeps.isNotEmpty()) {
                 echo("Runtime dependencies:")
                 deps.runtimeDeps.forEach { echo("  $it") }
                 printed = true
             }
 
-            if (deps.testDeps.isNotEmpty()) {
+            if (showTest && deps.testDeps.isNotEmpty()) {
                 if (printed) echo("")
                 echo("Test dependencies:")
                 deps.testDeps.forEach { echo("  $it") }
+                printed = true
+            }
+
+            if (!printed) {
+                when (selectedScope) {
+                    "runtime" -> echo("(no runtime dependencies)")
+                    "test" -> echo("(no test dependencies)")
+                    else -> echo("(no dependencies)")
+                }
             }
         }.onFailure { ex ->
             echo("error: ${ex.message}", err = true)
@@ -318,4 +412,79 @@ fun buildDependencyCommand(cwd: () -> Path): DependencyCommand {
         DependencyRemoveSubcommand(cwd),
         DependencyUpgradeSubcommand(cwd),
     )
+}
+
+private const val ANSI_LIGHT_GRAY = "\u001B[90m"
+private const val ANSI_RESET = "\u001B[0m"
+private const val BASE_TREE_INDENT = "    "
+private const val TREE_SEGMENT_WITH_PIPE = "|       "
+private const val TREE_SEGMENT_BLANK = "        "
+
+internal fun renderForest(roots: List<DependencyTreeNode>, useColor: Boolean = true): List<String> {
+    if (roots.isEmpty()) {
+        return emptyList()
+    }
+
+    val lines = mutableListOf<String>()
+    roots.forEach { root ->
+        lines += renderLine(prefix = "- ", coordinate = root.coordinate, useColor = useColor)
+        renderChildren(root.children, prefixSegments = "", out = lines, useColor = useColor)
+    }
+    return lines
+}
+
+private fun renderChildren(
+    children: List<DependencyTreeNode>,
+    prefixSegments: String,
+    out: MutableList<String>,
+    useColor: Boolean = true,
+) {
+    children.forEachIndexed { index, child ->
+        val isLast = index == children.lastIndex
+        val branch = "+-- "
+        val linePrefix = BASE_TREE_INDENT + prefixSegments + branch
+        out += renderLine(prefix = linePrefix, coordinate = child.coordinate, useColor = useColor)
+        val nextSegments = prefixSegments + if (isLast) TREE_SEGMENT_BLANK else TREE_SEGMENT_WITH_PIPE
+        renderChildren(child.children, nextSegments, out, useColor)
+    }
+}
+
+private fun renderLine(prefix: String, coordinate: String, useColor: Boolean): String {
+    if (!useColor) {
+        return "$prefix$coordinate"
+    }
+
+    val treePart = colorizeLightGray(prefix)
+    val coordinatePart = colorizeCoordinateWithGrayColons(coordinate)
+    return "$treePart$coordinatePart"
+}
+
+private fun colorizeCoordinateWithGrayColons(coordinate: String): String {
+    val parts = coordinate.split(":")
+    if (parts.size < 2) {
+        return coordinate
+    }
+    return parts.joinToString(separator = colorizeLightGray(":"))
+}
+
+private fun colorizeLightGray(text: String): String {
+    return "$ANSI_LIGHT_GRAY$text$ANSI_RESET"
+}
+
+internal fun buildListJson(scope: String, runtimeDeps: List<String>, testDeps: List<String>): String {
+    val payload = mapOf(
+        "scope" to scope,
+        "runtimeDeps" to runtimeDeps,
+        "testDeps" to testDeps,
+    )
+    return GsonBuilder().setPrettyPrinting().create().toJson(payload)
+}
+
+internal fun buildTreeJson(scope: String, runtimeTrees: List<DependencyTreeNode>, testTrees: List<DependencyTreeNode>): String {
+    val payload = mapOf(
+        "scope" to scope,
+        "runtime" to runtimeTrees,
+        "test" to testTrees,
+    )
+    return GsonBuilder().setPrettyPrinting().create().toJson(payload)
 }

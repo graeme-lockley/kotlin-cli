@@ -135,6 +135,7 @@ kli init my-project
 ```bash
 kli run tools.Server
 kli run tools.Server -- --port 8080
+kli run --verbose tools.Server
 ```
 
 ### Run Tests
@@ -155,6 +156,10 @@ kli project-lint
 
 ```bash
 kli dependency list
+kli dependency list --tree
+kli dependency list --tree --scope runtime
+kli dependency list --tree --format json
+kli dependency list --format json
 kli dependency status
 kli dependency add io.ktor:ktor-server-netty:3.1.2
 kli dependency add --scope test io.mockk:mockk:1.13.12
