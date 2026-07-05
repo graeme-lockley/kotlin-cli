@@ -38,6 +38,7 @@ Or use generated scripts after build:
 
 ```bash
 kli init my-project
+kli idea-setup
 kli run tools.Server
 kli test
 kli dependency list
@@ -113,6 +114,14 @@ kli dependency upgrade
 `kli dependency list` supports `--scope runtime|test|all`, `--tree` for transitive trees, and `--format json` for machine-readable output.
 
 Dependency mutations (`add`, `remove`, `upgrade`) clean the project cache by default. Use `--no-clean` to skip.
+
+## IntelliJ Support
+
+```bash
+kli idea-setup
+```
+
+This generates `settings.gradle.kts` and `build.gradle.kts` from `project.json` so IntelliJ IDEA can import the project with Kotlin language support and dependency classpath.
 
 ## Cache Locations
 

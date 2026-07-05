@@ -447,7 +447,26 @@ kli build --output ./dist/app.jar
 java -jar ./dist/app.jar tools.CLI
 ```
 
-### 2.12 Exit Codes
+### 2.12 `kli idea-setup [--force]`
+
+Generates Gradle Kotlin DSL files for IntelliJ IDEA project import.
+
+```
+kli idea-setup
+kli idea-setup --force
+```
+
+Behaviour:
+1. Locate project root via `project.json`
+2. Read project metadata (`name`, `target`, `deps`, `testDeps`, `sources`, `repos`)
+3. Generate `settings.gradle.kts` and `build.gradle.kts`
+4. Refuse overwrite unless `--force` is provided
+
+Outputs:
+- `settings.gradle.kts` with `rootProject.name`
+- `build.gradle.kts` with Kotlin JVM plugin, repositories, dependencies, toolchain, and source roots from `project.json`
+
+### 2.13 Exit Codes
 
 | Command | Exit code 0 | Exit code 1 | Exit code 2 |
 |---|---|---|---|
@@ -464,11 +483,12 @@ java -jar ./dist/app.jar tools.CLI
 | `kli dependency remove <coordinate>` | Dependency removed | Failed to update config | CLI usage error |
 | `kli dependency upgrade [coordinate]` | All targeted dependencies at desired version | Failed to update config | At least one targeted upgrade failed |
 | `kli build --output <path>` | JAR built successfully | Build failed | CLI usage error |
+| `kli idea-setup [--force]` | IntelliJ/Gradle files generated | Failed to read config or write files | CLI usage error |
 | `kli package [--output <path>]` | JAR built and installed to `~/.kli/m2/` | Build/install failed | CLI usage error |
 | `--silent` flag on run/test/package | Hides light-gray dependency/compile progress lines | n/a | n/a |
 | `kli publish [--registry <url>]` | Artifact published | Publish failed | CLI usage error |
 
-### 2.13 Global Options
+### 2.14 Global Options
 
 | Option | Behaviour |
 |---|---|

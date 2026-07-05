@@ -5,6 +5,7 @@ import kli.cache.ProjectCacheLayouts
 import kli.project.ProjectConfig
 import kli.project.ProjectConfigParser
 import kli.project.ProjectRootFinder
+import kli.project.TestDependencyDefaults
 import kli.resolver.DependencyResolutionResult
 import kli.resolver.DependencyResolver
 import kli.resolver.MavenDependencyResolver
@@ -55,16 +56,8 @@ class TestWorkflow(
 
         var config = parsed.config ?: return TestWorkflowOutcome.Failure(listOf("project.json could not be parsed"))
 
-        // Auto-inject test framework dependencies if testDeps is empty
-        if (config.testDeps.isEmpty()) {
-            config = config.copy(
-                testDeps = listOf(
-                    "org.jetbrains.kotlin:kotlin-test-junit5:2.0.21",
-                    "org.junit.jupiter:junit-jupiter-engine:5.13.4",
-                    "org.junit.platform:junit-platform-launcher:1.13.4",
-                ),
-            )
-        }
+        // Auto-inject default test dependencies when testDeps is not set.
+        config = config.copy(testDeps = TestDependencyDefaults.withDefaults(config.testDeps))
 
         val discovered = SourceLocator.discoverTestSources(projectRoot, config)
         val runSources = SourceLocator.discoverRunSources(projectRoot, config)

@@ -128,6 +128,7 @@ Useful fields:
 
 ```bash
 kli init my-project
+kli idea-setup
 ```
 
 ### Run Code

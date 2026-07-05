@@ -1,6 +1,7 @@
 package kli.test
 
 import kli.project.ProjectConfig
+import kli.project.TestDependencyDefaults
 import kli.resolver.DependencyResolutionResult
 import kli.resolver.DependencyResolver
 import java.nio.file.Files
@@ -116,6 +117,27 @@ class TestWorkflowTest {
 
         assertTrue(result is TestWorkflowOutcome.Failure)
         assertTrue((result as TestWorkflowOutcome.Failure).errors.first().contains("No matching test files"))
+    }
+
+    @Test
+    fun prepare_injects_default_test_deps_when_test_deps_are_missing() {
+        val root = Files.createTempDirectory("kli-test-workflow-default-test-deps")
+        root.resolve("project.json").writeText("""{"deps":[]}""")
+        root.resolve("tools").toFile().mkdirs()
+        root.resolve("tools/SampleTest.kt").writeText("class SampleTest")
+
+        val home = Files.createTempDirectory("kli-home").toString()
+        val workflow = TestWorkflow(
+            cwd = { root },
+            dependencyResolver = FakeResolver(),
+            userHome = home,
+        )
+
+        val result = workflow.prepare(null)
+
+        assertTrue(result is TestWorkflowOutcome.Success)
+        val plan = (result as TestWorkflowOutcome.Success).plan
+        assertEquals(TestDependencyDefaults.defaults, plan.config.testDeps)
     }
 
     private class FakeResolver : DependencyResolver {
